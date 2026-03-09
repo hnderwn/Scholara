@@ -15,8 +15,8 @@
 
 ### 🔗 Live Demo & Repository
 
-- **Online Demo:** (https://saw-spk-bingg.vercel.app)
-- **Repository:** (https://github.com/hnderwn/saw-spk-bingg)
+- **Online Demo:** (https://scholara-beryl.vercel.app)
+- **Repository:** (https://github.com/hnderwn/Scholara)
 
 ---
 
