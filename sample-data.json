@@ -1,0 +1,158 @@
+{
+  "profiles": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "full_name": "Admin User",
+      "school": "System Administrator",
+      "role": "admin"
+    },
+    {
+      "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "full_name": "John Doe",
+      "school": "SMA Negeri 1 Jakarta",
+      "role": "siswa"
+    },
+    {
+      "id": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+      "full_name": "Jane Smith",
+      "school": "SMA Negeri 2 Bandung",
+      "role": "siswa"
+    }
+  ],
+  "questions": [
+    {
+      "category": "Grammar",
+      "question_text": "Choose the correct verb form: She ___ to school every day.",
+      "options": {
+        "A": "go",
+        "B": "goes",
+        "C": "going",
+        "D": "gone",
+        "E": "went"
+      },
+      "correct_answer": "B",
+      "difficulty": 1,
+      "weight": 1
+    },
+    {
+      "category": "Grammar",
+      "question_text": "Which sentence is grammatically correct?",
+      "options": {
+        "A": "He don't like coffee.",
+        "B": "He doesn't likes coffee.",
+        "C": "He doesn't like coffee.",
+        "D": "He not like coffee.",
+        "E": "He don't likes coffee."
+      },
+      "correct_answer": "C",
+      "difficulty": 1,
+      "weight": 1
+    },
+    {
+      "category": "Vocabulary",
+      "question_text": "What is the synonym of 'happy'?",
+      "options": {
+        "A": "sad",
+        "B": "angry",
+        "C": "joyful",
+        "D": "tired",
+        "E": "hungry"
+      },
+      "correct_answer": "C",
+      "difficulty": 1,
+      "weight": 1
+    },
+    {
+      "category": "Vocabulary",
+      "question_text": "Choose the word that means 'very large':",
+      "options": {
+        "A": "tiny",
+        "B": "small",
+        "C": "medium",
+        "D": "enormous",
+        "E": "little"
+      },
+      "correct_answer": "D",
+      "difficulty": 2,
+      "weight": 2
+    },
+    {
+      "category": "Reading",
+      "question_text": "What is the main idea of a paragraph usually found in?",
+      "options": {
+        "A": "The middle of the paragraph",
+        "B": "The last sentence only",
+        "C": "The topic sentence",
+        "D": "Every sentence equally",
+        "E": "The examples given"
+      },
+      "correct_answer": "C",
+      "difficulty": 2,
+      "weight": 2
+    },
+    {
+      "category": "Reading",
+      "question_text": "When reading, what should you do first?",
+      "options": {
+        "A": "Read the details carefully",
+        "B": "Skim for main ideas",
+        "C": "Memorize every word",
+        "D": "Skip difficult parts",
+        "E": "Read backwards"
+      },
+      "correct_answer": "B",
+      "difficulty": 1,
+      "weight": 1
+    },
+    {
+      "category": "Cloze",
+      "question_text": "The weather is ___ today than yesterday.",
+      "options": {
+        "A": "good",
+        "B": "well",
+        "C": "better",
+        "D": "best",
+        "E": "more good"
+      },
+      "correct_answer": "C",
+      "difficulty": 2,
+      "weight": 2
+    },
+    {
+      "category": "Cloze",
+      "question_text": "She has been living here ___ five years.",
+      "options": {
+        "A": "since",
+        "B": "for",
+        "C": "from",
+        "D": "during",
+        "E": "while"
+      },
+      "correct_answer": "B",
+      "difficulty": 1,
+      "weight": 1
+    }
+  ],
+  "exam_results": [
+    {
+      "user_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "score_total": 75,
+      "category_scores": {
+        "grammar": { "score": 80, "difficultyStats": { "1": { "correct": 2, "total": 2 }, "2": { "correct": 0, "total": 0 }, "3": { "correct": 0, "total": 0 } } },
+        "vocab": { "score": 70, "difficultyStats": { "1": { "correct": 1, "total": 1 }, "2": { "correct": 0, "total": 1 }, "3": { "correct": 0, "total": 0 } } },
+        "reading": { "score": 75, "difficultyStats": { "1": { "correct": 1, "total": 1 }, "2": { "correct": 1, "total": 1 }, "3": { "correct": 0, "total": 0 } } },
+        "cloze": { "score": 65, "difficultyStats": { "1": { "correct": 1, "total": 1 }, "2": { "correct": 0, "total": 1 }, "3": { "correct": 0, "total": 0 } } }
+      }
+    },
+    {
+      "user_id": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+      "score_total": 85,
+      "category_scores": {
+        "grammar": { "score": 90, "difficultyStats": { "1": { "correct": 2, "total": 2 }, "2": { "correct": 0, "total": 0 }, "3": { "correct": 0, "total": 0 } } },
+        "vocab": { "score": 85, "difficultyStats": { "1": { "correct": 1, "total": 1 }, "2": { "correct": 1, "total": 1 }, "3": { "correct": 0, "total": 0 } } },
+        "reading": { "score": 80, "difficultyStats": { "1": { "correct": 1, "total": 1 }, "2": { "correct": 1, "total": 1 }, "3": { "correct": 0, "total": 0 } } },
+        "cloze": { "score": 85, "difficultyStats": { "1": { "correct": 1, "total": 1 }, "2": { "correct": 1, "total": 1 }, "3": { "correct": 0, "total": 0 } } }
+      }
+    }
+  ]
+}

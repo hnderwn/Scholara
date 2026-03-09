@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=IM+Fell+English:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply font-body bg-parchment text-ink focus-within:scroll-smooth;
+  }
+}
+
+@layer components {
+  .scholara-card {
+    @apply bg-parchment-light border border-gold-dark/20 rounded-sm shadow-xl relative overflow-hidden;
+    box-shadow: 0 10px 30px -10px rgba(10, 36, 99, 0.1);
+  }
+
+  .red-separator {
+    @apply h-[2px] w-full;
+    background: linear-gradient(90deg, transparent, #bf0a30 30%, #bf0a30 70%, transparent);
+  }
+
+  .ornament-gold {
+    @apply text-gold font-bold tracking-[0.4em] text-[10px];
+  }
+
+  .card {
+    @apply rounded-2xl shadow-sm p-4 bg-white;
+  }
+
+  .btn-primary {
+    @apply bg-navy text-white rounded-sm px-6 py-2.5 hover:bg-navy-light transition-all duration-200 font-body font-semibold transform hover:-translate-y-0.5 active:translate-y-0 shadow-md hover:shadow-lg;
+  }
+
+  .btn-danger {
+    @apply bg-crimson text-white rounded-sm px-4 py-2 hover:bg-crimson-light transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-parchment-dark text-ink rounded-sm px-4 py-2 hover:bg-parchment transition-colors border border-parchment-border;
+  }
+
+  .field-input {
+    @apply bg-parchment-dark border border-parchment-border text-ink rounded-sm px-4 py-2.5 outline-none transition-all duration-200 focus:bg-parchment-light focus:border-navy focus:ring-4 focus:ring-navy/5;
+  }
+}
