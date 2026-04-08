@@ -222,6 +222,16 @@ export const AuthProvider = ({ children }) => {
         // Tetap lanjut hapus sesi lokal meskipun server/API supabase gagal
       }
 
+      // SURGICAL STRIKE: Mencegah Zombie Session
+      // Hapus token akses asli dari Supabase yang tersisa di storage
+      // Key biasanya berbentuk 'sb-[project-id]-auth-token'
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+          localStorage.removeItem(key);
+        }
+      }
+
       setUser(null);
       setProfile(null);
       localStorage.removeItem(CACHE_KEY);

@@ -7,6 +7,7 @@ import Dashboard from './pages/siswa/Dashboard';
 import Exam from './pages/siswa/Exam';
 import Result from './pages/siswa/Result';
 import Dictionary from './pages/siswa/Dictionary';
+import Profile from './pages/siswa/Profile';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import Questions from './pages/admin/Questions';
 import Reports from './pages/admin/Reports';
@@ -115,6 +116,14 @@ function App() {
                       element={
                         <StudentLayout>
                           <Dictionary />
+                        </StudentLayout>
+                      }
+                    />
+                    <Route
+                      path="profile"
+                      element={
+                        <StudentLayout>
+                          <Profile />
                         </StudentLayout>
                       }
                     />

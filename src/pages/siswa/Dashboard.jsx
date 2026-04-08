@@ -429,14 +429,11 @@ const Dashboard = () => {
                 </button>
 
                 <button
-                  onClick={async () => {
-                    await signOut();
-                    navigate('/login');
-                  }}
-                  className="px-3 py-1.5 text-xs font-bold rounded-sm transition-all"
-                  style={{ color: '#FECDD3', border: '1px solid rgba(191,10,48,0.3)', background: 'rgba(191,10,48,0.1)' }}
+                  onClick={() => navigate('/siswa/profile')}
+                  className="px-3 py-1.5 text-xs font-bold rounded-sm transition-all flex items-center gap-1.5"
+                  style={{ color: '#0A2463', border: '1px solid #C8B99A', background: '#EDE4CC' }}
                 >
-                  Keluar
+                  <span>👤</span> Profil
                 </button>
               </div>
             </div>
@@ -492,7 +489,7 @@ const Dashboard = () => {
                 {/* Meta info */}
                 <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8">
                   {[
-                    { icon: '⏱', label: '60m' },
+                    { icon: '🕒', label: '60m' },
                     { icon: '📄', label: '50 soal' },
                     { icon: '📊', label: 'Mixed' },
                   ].map(({ icon, label }) => (
