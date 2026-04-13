@@ -26,16 +26,11 @@ export const AuthProvider = ({ children }) => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Ref untuk melacak status loading terbaru di dalam closure async
     let currentLoading = true;
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const handleSession = async (session) => {
       if (!mounted) return;
-
-      console.log(`AuthContext: Event [${event}] received`);
-
+      
       if (session?.user) {
         setUser(session.user);
 
@@ -51,17 +46,54 @@ export const AuthProvider = ({ children }) => {
         const profileData = await fetchProfile(session.user.id);
 
         if (mounted) {
-          if (profileData) setProfile(profileData);
+          if (profileData) {
+            setProfile(profileData);
+          } else {
+            console.warn('AuthContext: Profile fetch failed. Kicking user out.');
+            setUser(null);
+            setProfile(null);
+            localStorage.removeItem(CACHE_KEY);
+            
+            const badKeys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) badKeys.push(k);
+            }
+            badKeys.forEach(k => localStorage.removeItem(k));
+          }
           setLoading(false);
           currentLoading = false;
         }
-      } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_OUT') {
-        // Jika inisialisasi selesai tapi tidak ada user, atau memang signed out
-        setUser(null);
-        setProfile(null);
-        if (event === 'SIGNED_OUT') localStorage.removeItem(CACHE_KEY);
-        setLoading(false);
-        currentLoading = false;
+      } else {
+        if (mounted) {
+          setUser(null);
+          setProfile(null);
+          localStorage.removeItem(CACHE_KEY);
+          setLoading(false);
+          currentLoading = false;
+        }
+      }
+    };
+
+    // Ambil initial session secara eksplisit agar lebih handal saat refresh
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`AuthContext: Event [${event}] received`);
+      if (event === 'SIGNED_OUT') {
+        if (mounted) {
+          setUser(null);
+          setProfile(null);
+          localStorage.removeItem(CACHE_KEY);
+          setLoading(false);
+          currentLoading = false;
+        }
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        handleSession(session);
       }
     });
 
@@ -71,7 +103,7 @@ export const AuthProvider = ({ children }) => {
         console.warn('AuthContext: Initialization timeout reached. Forcing loading to false.');
         setLoading(false);
       }
-    }, 6000); // Batas 6 detik untuk pengalaman user yang lebih baik
+    }, 6000);
 
     return () => {
       mounted = false;
@@ -225,12 +257,14 @@ export const AuthProvider = ({ children }) => {
       // SURGICAL STRIKE: Mencegah Zombie Session
       // Hapus token akses asli dari Supabase yang tersisa di storage
       // Key biasanya berbentuk 'sb-[project-id]-auth-token'
+      const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
-          localStorage.removeItem(key);
+          keysToRemove.push(key);
         }
       }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
 
       setUser(null);
       setProfile(null);

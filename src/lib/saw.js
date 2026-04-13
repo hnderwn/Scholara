@@ -33,6 +33,10 @@ export function calculateSAWPriority(categoryData, weights = DEFAULT_WEIGHTS) {
   for (const [category, data] of Object.entries(categoryData)) {
     if (category === 'total') continue;
 
+    // SKIP kalkulasi jika kategori ini tidak diuji sama sekali (misal pada paket spesifik)
+    const hasTested = (data.difficultyStats?.[1]?.total || 0) + (data.difficultyStats?.[2]?.total || 0) + (data.difficultyStats?.[3]?.total || 0) > 0;
+    if (!hasTested) continue;
+
     const score = data.score || 0;
     const rawCost = (100 - score) / 100;
 
