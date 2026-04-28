@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { calculateSAWPriority } from '../../lib/saw';
+import { calculateSAWPriority, calculateOverallCEFR } from '../../lib/saw';
 import { db } from '../../lib/supabase';
 // Import UI components dipertahankan
 import Card from '../../components/ui/Card';
@@ -129,6 +129,8 @@ const Result = () => {
     return `${mins}m ${secs}d`;
   };
 
+  const overallCEFR = examResult ? calculateOverallCEFR(examResult.scores) : 'A1';
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F2ECD8' }}>
@@ -184,13 +186,20 @@ const Result = () => {
             <h2 className="text-[10px] font-black uppercase tracking-widest mt-2 mb-4" style={{ color: '#6B5A42' }}>
               Skor Total Evaluasi
             </h2>
-            <div className="mb-6 flex items-baseline justify-center">
-              <span className={`text-7xl font-black leading-none ${getScoreColor(examResult.scores.total)}`} style={{ fontFamily: "'Cormorant Garamond',serif" }}>
-                {examResult.scores.total}
-              </span>
-              <span className="text-2xl font-bold ml-1" style={{ color: '#A8946C', fontFamily: "'Cormorant Garamond',serif" }}>
-                /100
-              </span>
+            <div className="mb-6 flex flex-col md:flex-row items-center justify-center gap-4">
+              <div className="flex items-baseline">
+                <span className={`text-7xl font-black leading-none ${getScoreColor(examResult.scores.total)}`} style={{ fontFamily: "'Cormorant Garamond',serif" }}>
+                  {examResult.scores.total}
+                </span>
+                <span className="text-2xl font-bold ml-1" style={{ color: '#A8946C', fontFamily: "'Cormorant Garamond',serif" }}>
+                  /100
+                </span>
+              </div>
+              {examResult && (
+                <div className="flex items-center bg-[#1A4FAD] px-5 py-2.5 rounded-md border-2 border-[#0A2463] shadow-md">
+                  <span className="text-white text-3xl font-black tracking-widest">{overallCEFR}</span>
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-bold uppercase tracking-widest" style={{ color: '#6B5A42' }}>
               <span className="bg-[#EDE4CC] px-3 py-1 rounded-sm border border-[#C8B99A]">Durasi: {formatDuration(examResult.duration)}</span>

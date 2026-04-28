@@ -136,13 +136,22 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ## 📐 Logika Skor & SAW
 
-Scholara menggunakan metode **Weighted Percentage** untuk penilaian ujian:
+Scholara menggunakan algoritma **SAW (Simple Additive Weighting)** yang telah dimodifikasi secara khusus. Alih-alih hanya memberikan skor akhir, algoritma ini dirancang untuk memberikan **rekomendasi cerdas** tentang materi apa yang harus paling diprioritaskan oleh siswa.
 
-- **Difficulty (1-3)**: Mempengaruhi pemetaan level CEFR.
-- **Weight (1-3)**: Menentukan poin yang didapat per soal.
+### Cara Kerja Algoritma:
+1. **Pemberian Bobot (Weights)**: Setiap kategori materi bahasa Inggris memiliki beban kepentingannya masing-masing. Contoh: *Cloze* (Tes Rumpang) berbobot 30% karena melatih berbagai skill sekaligus, sedangkan *Vocab* (Kosakata) berbobot 20%.
+2. **Kalkulasi Cost (Jarak Kelemahan)**: Sistem menghitung seberapa jauh siswa dari nilai sempurna untuk mencari kelemahan utamanya. Rumusnya: `(100 - Skor Asli) / 100`. Semakin kecil nilai ujian siswa, semakin tinggi "Cost" atau kebutuhannya untuk belajar.
+3. **Multiplier Fondasi (Penggali Kesulitan Dasar)**: Ini adalah fitur analitik tercerdas aplikasi ini. Sistem mengintip tingkat kesulitan (*difficulty*) dari soal-soal yang salah dijawab. Jika siswa salah di soal tingkat dasar (Level 1), tingkat urgensi belajarnya akan **dikali lipat hingga 1.5x**.
+4. **Rumus Final**: `Skor Prioritas = Cost × Bobot Kategori × Multiplier Fondasi`
 
-**SAW Calculation:**
-Sistem menghitung nilai preferensi untuk setiap kategori (Grammar, Vocab, Reading, Cloze) berdasarkan skor terendah dan bobot kepentingan, memberikan _output_ urutan materi yang paling mendesak untuk dipelajari.
+### Contoh Kasus (User-Friendly Example):
+Bayangkan Budi mendapat nilai **60 untuk Grammar** dan **60 untuk Reading**. Secara sekilas (di sistem ujian biasa), Budi terlihat sama-sama lemah di kedua materi tersebut.
+
+Namun, mesin SAW Scholara menelusuri lebih dalam:
+- Budi gagal *Reading* karena banyak salah di soal Level 3 (Level Sulit).
+- Budi gagal *Grammar* karena dia banyak salah di soal Level 1 (Level Dasar).
+
+**Hasil Rekomendasi**: Algoritma SAW akan secara otomatis melipatgandakan skor prioritas *Grammar* Budi karena terdeteksi bahwa dia kehilangan "fondasi dasar". Di Dashboard, sistem akan memberikan label **Kritis (Merah)** untuk *Grammar* dan menyuruh Budi untuk segera fokus memperbaikinya, sementara *Reading* hanya diberi label **Prioritas Sedang (Kuning)**.
 
 ---
 

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useExam } from '../../context/ExamContext';
 import { db } from '../../lib/supabase';
 import { localDB } from '../../utils/indexedDB';
+import { calculateSAWPriority } from '../../lib/saw';
 
 // ── Shield Icon ──
 const ShieldIcon = ({ size = 32 }) => (
@@ -49,26 +50,51 @@ const examPackages = [
     questions: 50,
     category: 'Diagnostic',
     type: 'ujian',
+    minCefr: 'A1'
   },
   {
     id: 'basic_mastery',
     name: 'Basic Mastery',
-    uniqueName: 'Level A1-A2',
+    uniqueName: 'Level A1',
     description: 'Fokus pada penguasaan materi dasar.',
     duration: 40,
     questions: 30,
     category: 'Basic',
     type: 'ujian',
+    minCefr: 'A1'
+  },
+  {
+    id: 'pre_intermediate',
+    name: 'Pre-Intermediate Bridge',
+    uniqueName: 'Level A2',
+    description: 'Menjembatani ke pemahaman konteks harian.',
+    duration: 40,
+    questions: 30,
+    category: 'Basic',
+    type: 'ujian',
+    minCefr: 'A2'
   },
   {
     id: 'intermediate_path',
     name: 'Intermediate Path',
-    uniqueName: 'Level B1-B2',
+    uniqueName: 'Level B1',
     description: 'Fokus pada pemahaman konteks menengah.',
     duration: 45,
     questions: 30,
     category: 'Intermediate',
     type: 'ujian',
+    minCefr: 'B1'
+  },
+  {
+    id: 'upper_intermediate',
+    name: 'Upper-Intermediate Flight',
+    uniqueName: 'Level B2',
+    description: 'Fokus pada ekspresi dan argumen kompleks.',
+    duration: 45,
+    questions: 30,
+    category: 'Intermediate',
+    type: 'ujian',
+    minCefr: 'B2'
   },
   {
     id: 'advanced_pro',
@@ -79,6 +105,7 @@ const examPackages = [
     questions: 30,
     category: 'Advanced',
     type: 'ujian',
+    minCefr: 'C1'
   },
   {
     id: 'daily_speed_check',
@@ -140,10 +167,15 @@ const Dashboard = () => {
   const { profile, isAdmin, signOut } = useAuth();
   const { clearExam } = useExam();
 
-  // ── Semua state asli tidak diubah ──
   const [stats, setStats] = useState({ totalExams: 0, averageScore: 0, lastExamDate: null });
   const [examHistory, setExamHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [weakTopics, setWeakTopics] = useState([]);
+
+  // Fungsi pengecekan CEFR
+  const cefrValues = { 'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'C1': 5, 'C2': 6 };
+  const userCefr = profile?.cefr_level || 'A1';
+  const isPackageLocked = (minCefr) => minCefr && cefrValues[minCefr] > cefrValues[userCefr];
 
   useEffect(() => {
     let mounted = true;
@@ -206,6 +238,23 @@ const Dashboard = () => {
         const averageScore = Math.round(totalScore / totalExams);
         const lastExamDate = data[0].created_at;
         setStats({ totalExams, averageScore, lastExamDate });
+
+        // Kalkulasi Rekomendasi SAW Real
+        const latestScores = data[0].category_scores;
+        if (latestScores && Object.keys(latestScores).length > 0) {
+          const recommendations = calculateSAWPriority(latestScores);
+          const mappedTopics = recommendations.slice(0, 2).map(rec => {
+            const practiceId = rec.categoryKey === 'grammar' ? 'grammar_master' : 
+                               rec.categoryKey === 'vocab' ? 'vocab_power' :
+                               rec.categoryKey === 'reading' ? 'reading_pro' : 'cloze_challenge';
+            const pkg = examPackages.find(p => p.id === practiceId);
+            return {
+              ...pkg,
+              weakScore: Math.round(rec.priorityScore * 100) || 0 // Fallback ke 0 jika NaN
+            };
+          }).filter(p => p.id !== undefined);
+          setWeakTopics(mappedTopics);
+        }
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -251,16 +300,6 @@ const Dashboard = () => {
 
   const formatDate = (dateString) => new Date(dateString).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 
-  // ── Derived data untuk rekomendasi (dari examHistory) ──
-  // Simulasi weak topics dari history — di production bisa dari field breakdown score
-  const weakTopics =
-    examHistory.length > 0
-      ? examPackages
-          .filter((p) => p.type === 'latihan' && p.category === 'Skill')
-          .slice(0, 2)
-          .map((p) => ({ ...p, weakScore: Math.floor(Math.random() * 30) + 40 }))
-      : [];
-
   // Streak simulasi — di production dari data harian user
   const streak = 7;
 
@@ -278,63 +317,76 @@ const Dashboard = () => {
   }
 
   // ── Package card untuk ujian (non-diagnostic) ──
-  const PackageCard = ({ pkg }) => (
-    <div
-      className="flex items-start justify-between p-5 rounded-sm transition-all duration-200 hover:-translate-y-0.5 group"
-      style={{ background: '#FAF6EC', border: '1px solid #C8B99A', boxShadow: '0 1px 3px rgba(10,36,99,0.06)' }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = '#1A4FAD';
-        e.currentTarget.style.boxShadow = '0 4px 16px rgba(10,36,99,0.1)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = '#C8B99A';
-        e.currentTarget.style.boxShadow = '0 1px 3px rgba(10,36,99,0.06)';
-      }}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap mb-1">
-          <h3 className="font-bold text-base" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
-            {pkg.name}
-          </h3>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm" style={{ background: 'rgba(10,36,99,0.06)', color: '#0A2463', border: '1px solid rgba(10,36,99,0.15)' }}>
-            {pkg.uniqueName}
-          </span>
-        </div>
-        <p className="text-xs mb-3" style={{ color: '#6B5A42' }}>
-          {pkg.description}
-        </p>
-        <div className="flex items-center gap-4 text-xs" style={{ color: '#6B5A42' }}>
-          <span className="flex items-center gap-1">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {pkg.duration}m
-          </span>
-          <span className="flex items-center gap-1">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            {pkg.questions} soal
-          </span>
-        </div>
-      </div>
-      <button
-        onClick={() => startExam(pkg.id)}
-        className="ml-4 flex-shrink-0 px-4 py-2 text-xs font-bold rounded-sm text-white transition-all"
-        style={{ background: '#1A4FAD' }}
+  const PackageCard = ({ pkg }) => {
+    const locked = isPackageLocked(pkg.minCefr);
+
+    return (
+      <div
+        className={`flex items-start justify-between p-5 rounded-sm transition-all duration-200 ${locked ? 'opacity-75 grayscale-[50%]' : 'hover:-translate-y-0.5 group'}`}
+        style={{ background: '#FAF6EC', border: '1px solid #C8B99A', boxShadow: '0 1px 3px rgba(10,36,99,0.06)' }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#2460C8';
-          e.currentTarget.style.transform = 'translateY(-1px)';
+          if (!locked) {
+            e.currentTarget.style.borderColor = '#1A4FAD';
+            e.currentTarget.style.boxShadow = '0 4px 16px rgba(10,36,99,0.1)';
+          }
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = '#1A4FAD';
-          e.currentTarget.style.transform = 'none';
+          if (!locked) {
+            e.currentTarget.style.borderColor = '#C8B99A';
+            e.currentTarget.style.boxShadow = '0 1px 3px rgba(10,36,99,0.06)';
+          }
         }}
       >
-        Mulai
-      </button>
-    </div>
-  );
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h3 className="font-bold text-base" style={{ fontFamily: "'Cormorant Garamond',serif", color: locked ? '#6B5A42' : '#0A2463' }}>
+              {pkg.name}
+            </h3>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm" style={{ background: locked ? '#EDE4CC' : 'rgba(10,36,99,0.06)', color: locked ? '#6B5A42' : '#0A2463', border: '1px solid rgba(10,36,99,0.15)' }}>
+              {pkg.uniqueName}
+            </span>
+          </div>
+          <p className="text-xs mb-3" style={{ color: '#6B5A42' }}>
+            {pkg.description}
+          </p>
+          <div className="flex items-center gap-4 text-xs" style={{ color: '#6B5A42' }}>
+            <span className="flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {pkg.duration}m
+            </span>
+            <span className="flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {pkg.questions} soal
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={() => !locked && startExam(pkg.id)}
+          disabled={locked}
+          className={`ml-4 flex-shrink-0 px-4 py-2 text-xs font-bold rounded-sm text-white transition-all flex items-center gap-1 ${locked ? 'cursor-not-allowed opacity-80' : ''}`}
+          style={{ background: locked ? '#A8946C' : '#1A4FAD' }}
+          onMouseEnter={(e) => {
+            if (!locked) {
+              e.currentTarget.style.background = '#2460C8';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!locked) {
+              e.currentTarget.style.background = '#1A4FAD';
+              e.currentTarget.style.transform = 'none';
+            }
+          }}
+        >
+          {locked ? <span>🔒 Kunci ({pkg.minCefr})</span> : 'Mulai'}
+        </button>
+      </div>
+    );
+  };
 
   // ── Compact card untuk latihan ──
   const SkillCard = ({ pkg }) => {
@@ -412,10 +464,13 @@ const Dashboard = () => {
                 </div>
               )}
 
-              {/* Streak badge */}
+              {/* Streak badge & CEFR */}
               <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-sm" style={{ background: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.3)' }}>
                 <span className="text-sm md:text-base">🔥</span>
                 <span className="text-white font-bold text-xs md:text-sm">{streak}</span>
+              </div>
+              <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 md:py-1.5 rounded-sm" style={{ background: '#16A34A', border: '1px solid #15803D' }}>
+                <span className="text-white font-black text-xs md:text-sm tracking-widest">{userCefr}</span>
               </div>
 
               {/* Desktop-only Actions */}

@@ -17,12 +17,13 @@ const Exam = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { profile, user } = useAuth();
-  const { questions, answers, currentQuestionIndex, timeLeft, isActive, currentQuestion, totalQuestions, startExam, setAnswer, goToQuestion, nextQuestion, prevQuestion, finishExam, formatTime, clearExam } = useExam();
+  const { questions, answers, currentQuestionIndex, endTime, duration, isActive, currentQuestion, totalQuestions, startExam, setAnswer, goToQuestion, nextQuestion, prevQuestion, finishExam, formatTime, getRemainingTime, clearExam } = useExam();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
+  const [snapshotTimeLeft, setSnapshotTimeLeft] = useState(0);
 
   // Auto-submit function ketika waktu habis
   useEffect(() => {
@@ -34,13 +35,24 @@ const Exam = () => {
 
   useEffect(() => {
     loadExamQuestions();
-  }, []);
+  }, [searchParams]);
+
+  // Helper fungsi pengacak array (Fisher-Yates)
+  const shuffleArray = (array) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
 
   const loadExamQuestions = async () => {
     try {
       setLoading(true);
       const packageId = searchParams.get('paket');
-      clearExam();
+      // Kita TIDAK memanggil clearExam() lagi secara brutal agar fungsi REJOIN dari context aktif!
+
 
       let data, error;
 
@@ -61,45 +73,46 @@ const Exam = () => {
       let examQuestions = data || [];
 
       if (packageId === 'kickstart_diagnostic') {
-        examQuestions = examQuestions.slice(0, 50);
+        examQuestions = shuffleArray(examQuestions).slice(0, 50);
       } else if (packageId === 'grammar_master') {
-        examQuestions = examQuestions.filter((q) => q.category === 'Grammar').slice(0, 20);
+        examQuestions = shuffleArray(examQuestions.filter((q) => q.category === 'Grammar')).slice(0, 20);
       } else if (packageId === 'vocab_power') {
-        examQuestions = examQuestions.filter((q) => q.category === 'Vocabulary').slice(0, 20);
+        examQuestions = shuffleArray(examQuestions.filter((q) => q.category === 'Vocabulary')).slice(0, 20);
       } else if (packageId === 'reading_pro') {
-        examQuestions = examQuestions.filter((q) => q.category === 'Reading').slice(0, 15);
+        examQuestions = shuffleArray(examQuestions.filter((q) => q.category === 'Reading')).slice(0, 15);
       } else if (packageId === 'cloze_challenge') {
-        examQuestions = examQuestions.filter((q) => q.category === 'Cloze').slice(0, 20);
+        examQuestions = shuffleArray(examQuestions.filter((q) => q.category === 'Cloze')).slice(0, 20);
       } else if (packageId === 'daily_speed_check') {
-        examQuestions = examQuestions.slice(0, 15);
+        examQuestions = shuffleArray(examQuestions).slice(0, 15);
       } else if (packageId === 'basic_mastery') {
-        const l1 = examQuestions.filter((q) => q.difficulty === 1).slice(0, 24);
-        const l2 = examQuestions.filter((q) => q.difficulty === 2).slice(0, 6);
-        examQuestions = [...l1, ...l2];
+        const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 24);
+        const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 6);
+        examQuestions = shuffleArray([...l1, ...l2]);
       } else if (packageId === 'intermediate_path') {
-        const l1 = examQuestions.filter((q) => q.difficulty === 1).slice(0, 6);
-        const l2 = examQuestions.filter((q) => q.difficulty === 2).slice(0, 18);
-        const l3 = examQuestions.filter((q) => q.difficulty === 3).slice(0, 6);
-        examQuestions = [...l1, ...l2, ...l3];
+        const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 6);
+        const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 18);
+        const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 6);
+        examQuestions = shuffleArray([...l1, ...l2, ...l3]);
       } else if (packageId === 'advanced_pro') {
-        const l2 = examQuestions.filter((q) => q.difficulty === 2).slice(0, 6);
-        const l3 = examQuestions.filter((q) => q.difficulty === 3).slice(0, 24);
-        examQuestions = [...l2, ...l3];
+        const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 6);
+        const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 24);
+        examQuestions = shuffleArray([...l2, ...l3]);
       } else if (packageId === 'practice') {
         const targetCategory = searchParams.get('category');
         if (targetCategory) {
-          examQuestions = examQuestions.filter((q) => q.category === targetCategory).slice(0, 15);
+          examQuestions = shuffleArray(examQuestions.filter((q) => q.category === targetCategory)).slice(0, 15);
         }
       } else {
-        examQuestions = examQuestions.slice(0, 50);
+        examQuestions = shuffleArray(examQuestions).slice(0, 50);
       }
 
       if (examQuestions.length === 0) {
         examQuestions = generateMockQuestions(packageId, searchParams.get('category'));
       }
 
-      const duration = getPackageDuration(packageId);
-      startExam(examQuestions, duration);
+      const dur = getPackageDuration(packageId);
+      // Panggil startExam - jika state lama dikenali context, examQuestions ini akan dirangkai dengan answers lama.
+      startExam(examQuestions, packageId, dur);
     } catch (error) {
       console.error('Error loading exam questions:', error);
     } finally {
@@ -205,6 +218,11 @@ const Exam = () => {
     }
   };
 
+  const handleOpenSubmit = () => {
+    setSnapshotTimeLeft(getRemainingTime());
+    setShowConfirmSubmit(true);
+  }
+
   const handleSubmitExam = async () => {
     setShowConfirmSubmit(false);
     await handleAutoSubmit();
@@ -243,8 +261,8 @@ const Exam = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold leading-none" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
-                Naskah Ujian Resmi
+              <h1 className="text-2xl font-bold leading-none capitalize" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
+                {searchParams.get('paket') ? searchParams.get('paket').split('_').join(' ') : 'Naskah Ujian Resmi'}
               </h1>
               <p className="text-xs italic mt-1" style={{ fontFamily: "'IM Fell English',serif", color: '#6B5A42' }}>
                 Soal {currentQuestionIndex + 1} dari {totalQuestions}
@@ -252,9 +270,9 @@ const Exam = () => {
             </div>
 
             <div className="flex items-center space-x-4 md:space-x-6">
-              {/* Timer UI (assuming it handles its own styles, but we wrap it carefully) */}
+              {/* Timer UI Now independently ticks via Absolute endTime */}
               <div className="font-bold text-lg" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#BF0A30' }}>
-                <Timer timeLeft={timeLeft} isActive={isActive} />
+                <Timer endTime={endTime} duration={duration} isActive={isActive} />
               </div>
 
               <div className="flex items-center space-x-3">
@@ -264,7 +282,7 @@ const Exam = () => {
                 </button>
 
                 <button
-                  onClick={() => setShowConfirmSubmit(true)}
+                  onClick={handleOpenSubmit}
                   className="px-4 py-2 text-xs font-bold text-white rounded-sm shadow-sm transition-all hover:-translate-y-px"
                   style={{ backgroundColor: '#1A4FAD', border: '1px solid #0A2463' }}
                 >
@@ -309,7 +327,7 @@ const Exam = () => {
 
                 {currentQuestionIndex === totalQuestions - 1 ? (
                   <button
-                    onClick={() => setShowConfirmSubmit(true)}
+                    onClick={handleOpenSubmit}
                     className="px-4 py-2 flex items-center text-sm font-bold rounded-sm text-white transition-all hover:bg-[#2460C8]"
                     style={{ backgroundColor: '#1A4FAD', border: '1px solid #0A2463' }}
                   >
@@ -387,7 +405,7 @@ const Exam = () => {
                 Kumpulkan Ujian?
               </h3>
               <p className="text-sm italic mb-6" style={{ fontFamily: "'IM Fell English',serif", color: '#6B5A42' }}>
-                Apakah Anda yakin ingin mengumpulkan ujian? Waktu tersisa <b style={{ color: '#BF0A30' }}>{formatTime(timeLeft)}</b> lagi.
+                Apakah Anda yakin ingin mengumpulkan ujian? Waktu tersisa <b style={{ color: '#BF0A30' }}>{formatTime(snapshotTimeLeft)}</b> lagi.
               </p>
               <div className="flex justify-end space-x-3 pt-4 border-t" style={{ borderColor: 'rgba(200,185,154,0.4)' }}>
                 <button onClick={() => setShowConfirmSubmit(false)} className="px-4 py-2 text-xs font-bold rounded-sm uppercase tracking-wider transition-colors" style={{ color: '#6B5A42', border: '1px solid #C8B99A' }}>
