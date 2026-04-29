@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useExam } from '../../context/ExamContext';
 import { db } from '../../lib/supabase';
 import { localDB } from '../../utils/indexedDB';
+import { determineCEFR, calculateOverallCEFR } from '../../lib/saw';
 // Import UI components dipertahankan
 import QuestionCard from '../../components/Exam/QuestionCard';
 import Timer from '../../components/ui/Timer';
@@ -74,14 +75,53 @@ const Exam = () => {
 
       if (packageId === 'kickstart_diagnostic') {
         examQuestions = shuffleArray(examQuestions).slice(0, 50);
-      } else if (packageId === 'grammar_master') {
-        examQuestions = shuffleArray(examQuestions.filter((q) => q.category === 'Grammar')).slice(0, 20);
-      } else if (packageId === 'vocab_power') {
-        examQuestions = shuffleArray(examQuestions.filter((q) => q.category === 'Vocabulary')).slice(0, 20);
-      } else if (packageId === 'reading_pro') {
-        examQuestions = shuffleArray(examQuestions.filter((q) => q.category === 'Reading')).slice(0, 15);
-      } else if (packageId === 'cloze_challenge') {
-        examQuestions = shuffleArray(examQuestions.filter((q) => q.category === 'Cloze')).slice(0, 20);
+      } else if (['grammar_master', 'vocab_power', 'reading_pro', 'cloze_challenge', 'practice'].includes(packageId)) {
+        let targetCategory = '';
+        let totalCount = 20;
+
+        if (packageId === 'grammar_master') targetCategory = 'Grammar';
+        else if (packageId === 'vocab_power') targetCategory = 'Vocabulary';
+        else if (packageId === 'reading_pro') { targetCategory = 'Reading'; totalCount = 15; }
+        else if (packageId === 'cloze_challenge') targetCategory = 'Cloze';
+        else if (packageId === 'practice') { targetCategory = searchParams.get('category'); totalCount = 15; }
+
+        if (targetCategory) {
+          const catKey = targetCategory.toLowerCase() === 'vocabulary' ? 'vocab' : targetCategory.toLowerCase();
+          const cefr = profile?.skill_levels?.[catKey] || 'A1';
+          const filtered = examQuestions.filter(q => q.category === targetCategory);
+          const l1Pool = shuffleArray(filtered.filter(q => q.difficulty === 1));
+          const l2Pool = shuffleArray(filtered.filter(q => q.difficulty === 2));
+          const l3Pool = shuffleArray(filtered.filter(q => q.difficulty === 3));
+
+          let l1Count = 0, l2Count = 0, l3Count = 0;
+          if (cefr === 'A1' || cefr === 'A2') {
+            l1Count = Math.round(totalCount * 0.8);
+            l2Count = Math.round(totalCount * 0.2);
+          } else if (cefr === 'B1' || cefr === 'B2') {
+            l1Count = Math.round(totalCount * 0.2);
+            l2Count = Math.round(totalCount * 0.6);
+            l3Count = Math.round(totalCount * 0.2);
+          } else {
+            l2Count = Math.round(totalCount * 0.3);
+            l3Count = Math.round(totalCount * 0.7);
+          }
+
+          let adaptiveQuestions = [
+            ...l1Pool.slice(0, l1Count),
+            ...l2Pool.slice(0, l2Count),
+            ...l3Pool.slice(0, l3Count)
+          ];
+
+          // Jika stok soal spesifik di bank data tidak mencukupi, isi kekurangannya secara acak
+          const remainingNeeded = totalCount - adaptiveQuestions.length;
+          if (remainingNeeded > 0) {
+             const usedIds = new Set(adaptiveQuestions.map(q => q.id));
+             const unused = shuffleArray(filtered.filter(q => !usedIds.has(q.id)));
+             adaptiveQuestions.push(...unused.slice(0, remainingNeeded));
+          }
+
+          examQuestions = shuffleArray(adaptiveQuestions);
+        }
       } else if (packageId === 'daily_speed_check') {
         examQuestions = shuffleArray(examQuestions).slice(0, 15);
       } else if (packageId === 'basic_mastery') {
@@ -97,11 +137,6 @@ const Exam = () => {
         const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 6);
         const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 24);
         examQuestions = shuffleArray([...l2, ...l3]);
-      } else if (packageId === 'practice') {
-        const targetCategory = searchParams.get('category');
-        if (targetCategory) {
-          examQuestions = shuffleArray(examQuestions.filter((q) => q.category === targetCategory)).slice(0, 15);
-        }
       } else {
         examQuestions = shuffleArray(examQuestions).slice(0, 50);
       }
@@ -200,12 +235,36 @@ const Exam = () => {
         answers: examResult.answers,
       };
 
+      let newSkillLevels = { ...(profile?.skill_levels || { grammar: 'A1', vocab: 'A1', reading: 'A1', cloze: 'A1' }) };
+      
+      ['grammar', 'vocab', 'reading', 'cloze'].forEach(cat => {
+        if (examResult.scores[cat]?.difficultyStats) {
+           const stats = examResult.scores[cat].difficultyStats;
+           const hasTested = (stats[1]?.total || 0) + (stats[2]?.total || 0) + (stats[3]?.total || 0) > 0;
+           if (hasTested) {
+             newSkillLevels[cat] = determineCEFR(stats);
+           }
+        }
+      });
+
+      let newOverallCefr = profile?.cefr_level || 'A1';
+      if (packageId === 'kickstart_diagnostic' || packageId === 'basic_mastery' || packageId === 'intermediate_path' || packageId === 'advanced_pro') {
+         newOverallCefr = calculateOverallCEFR(examResult.scores);
+      }
+
       if (navigator.onLine) {
         const { error } = await db.saveExamResult(dbPayload);
         if (error) throw error;
+        
+        // Update profile
+        await db.updateProfile(user.id, {
+           cefr_level: newOverallCefr,
+           skill_levels: newSkillLevels
+        });
       } else {
         console.log('Exam: Offline, queuing result');
         await localDB.queueResult(dbPayload);
+        // Offline profile updates could be handled by localDB, but we keep it simple for now
         alert('Ujian selesai! Karena kamu sedang offline, hasil ujian disimpan di perangkat dan akan otomatis disinkronkan saat terhubung internet.');
       }
 

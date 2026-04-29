@@ -69,7 +69,7 @@ export function calculateSAWPriority(categoryData, weights = DEFAULT_WEIGHTS) {
 /**
  * Menentukan Level CEFR berdasarkan performa tingkat kesulitan
  */
-function determineCEFR(difficultyStats) {
+export function determineCEFR(difficultyStats) {
   if (!difficultyStats) return 'A1';
 
   const l1Total = difficultyStats[1]?.total || 0;
