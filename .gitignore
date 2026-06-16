@@ -22,7 +22,6 @@ dist-ssr
 *.crt
 
 # Custom User Files
-fut_development.md
 
 # Build output & Caches
 build/
@@ -34,7 +33,6 @@ coverage/
 *.sqlite
 *.sqlite3
 *.db
-*.sql
 
 # Editor directories and files
 .vscode/*

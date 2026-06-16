@@ -5,6 +5,7 @@ import { useExam } from '../../context/ExamContext';
 import { db } from '../../lib/supabase';
 import { localDB } from '../../utils/indexedDB';
 import { calculateSAWPriority } from '../../lib/saw';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 
 // ── Shield Icon ──
 const ShieldIcon = ({ size = 32 }) => (
@@ -57,8 +58,8 @@ const examPackages = [
     name: 'Basic Mastery',
     uniqueName: 'Level A1',
     description: 'Fokus pada penguasaan materi dasar.',
-    duration: 40,
-    questions: 30,
+    duration: 60,
+    questions: 50,
     category: 'Basic',
     type: 'ujian',
     minCefr: 'A1'
@@ -68,8 +69,8 @@ const examPackages = [
     name: 'Pre-Intermediate Bridge',
     uniqueName: 'Level A2',
     description: 'Menjembatani ke pemahaman konteks harian.',
-    duration: 40,
-    questions: 30,
+    duration: 60,
+    questions: 50,
     category: 'Basic',
     type: 'ujian',
     minCefr: 'A2'
@@ -79,8 +80,8 @@ const examPackages = [
     name: 'Intermediate Path',
     uniqueName: 'Level B1',
     description: 'Fokus pada pemahaman konteks menengah.',
-    duration: 45,
-    questions: 30,
+    duration: 65,
+    questions: 50,
     category: 'Intermediate',
     type: 'ujian',
     minCefr: 'B1'
@@ -90,8 +91,8 @@ const examPackages = [
     name: 'Upper-Intermediate Flight',
     uniqueName: 'Level B2',
     description: 'Fokus pada ekspresi dan argumen kompleks.',
-    duration: 45,
-    questions: 30,
+    duration: 65,
+    questions: 50,
     category: 'Intermediate',
     type: 'ujian',
     minCefr: 'B2'
@@ -101,11 +102,11 @@ const examPackages = [
     name: 'Advanced Pro',
     uniqueName: 'Level C1-C2',
     description: 'Tantangan tingkat tinggi & akademik.',
-    duration: 50,
-    questions: 30,
+    duration: 70,
+    questions: 50,
     category: 'Advanced',
     type: 'ujian',
-    minCefr: 'C1'
+    minCefr: 'C1/C2'
   },
   {
     id: 'daily_speed_check',
@@ -164,18 +165,130 @@ const examPackages = [
 // ─────────────────────────────────────────────────
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { profile, isAdmin, signOut } = useAuth();
+  const { profile, isAdmin, signOut, updateLocalProfile } = useAuth();
   const { clearExam } = useExam();
 
   const [stats, setStats] = useState({ totalExams: 0, averageScore: 0, lastExamDate: null });
   const [examHistory, setExamHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [weakTopics, setWeakTopics] = useState([]);
+  const [isLatihanExpanded, setIsLatihanExpanded] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmVariant: 'primary',
+    onConfirm: () => {},
+  });
+  const [hasDiagnostic, setHasDiagnostic] = useState(false);
 
-  // Fungsi pengecekan CEFR
-  const cefrValues = { 'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'C1': 5, 'C2': 6 };
+  // Fungsi pengecekan CEFR & Tangga Progresi Ketat (Point 3)
+  const CEFR_LEVELS_LADDER = ['A1', 'A2', 'B1', 'B2', 'C1/C2'];
+  const packageTargetCefr = {
+    basic_mastery: 'A1',
+    pre_intermediate: 'A2',
+    intermediate_path: 'B1',
+    upper_intermediate: 'B2',
+    advanced_pro: 'C1/C2'
+  };
   const userCefr = profile?.cefr_level || 'A1';
-  const isPackageLocked = (minCefr) => minCefr && cefrValues[minCefr] > cefrValues[userCefr];
+
+  /**
+   * @description Menentukan apakah suatu paket ujian terkunci berdasarkan aturan progresi tangga CEFR
+   * @param {Object} pkg - Objek paket ujian
+   * @returns {boolean} True jika terkunci
+   */
+  const isPackageLocked = (pkg) => {
+    if (pkg.id === 'kickstart_diagnostic') {
+      // Kunci Diagnostic jika sudah menyelesaikan Ujian Diagnostik
+      return hasDiagnostic;
+    }
+    
+    if (pkg.type === 'latihan') {
+      return false; // Latihan materi tidak pernah dikunci
+    }
+    
+    // Untuk user baru yang belum pernah diagnostik, kunci semua paket Tryout Utama
+    if (!hasDiagnostic) {
+      return true;
+    }
+
+    const targetCefr = packageTargetCefr[pkg.id];
+    if (!targetCefr) return false;
+    
+    const userCefrIdx = CEFR_LEVELS_LADDER.indexOf(userCefr);
+    const targetCefrIdx = CEFR_LEVELS_LADDER.indexOf(targetCefr);
+    
+    // Paket di atas level aktif user -> selalu terkunci
+    if (targetCefrIdx > userCefrIdx) {
+      return true;
+    }
+    
+    // Paket di bawah level aktif user -> selalu terbuka (review mode)
+    if (targetCefrIdx < userCefrIdx) {
+      return false;
+    }
+    
+    // Paket pada level aktif user -> terkunci sampai lulus minimal 4 latihan
+    const passedCount = profile?.passed_practices?.length || 0;
+    return passedCount < 4;
+  };
+
+  // Dapatkan paket Ujian Utama yang aktif berdasarkan level CEFR aktif user
+  const getActiveOverallPackage = () => {
+    if (!hasDiagnostic) {
+      return examPackages.find(p => p.id === 'kickstart_diagnostic');
+    }
+    const targetIdMap = {
+      'A1': 'basic_mastery',
+      'A2': 'pre_intermediate',
+      'B1': 'intermediate_path',
+      'B2': 'upper_intermediate',
+      'C1/C2': 'advanced_pro'
+    };
+    const targetId = targetIdMap[userCefr] || 'basic_mastery';
+    return examPackages.find(p => p.id === targetId) || examPackages.find(p => p.id === 'basic_mastery');
+  };
+
+  const getNextRecommendedPractice = () => {
+    // 1. Jika ada weakTopics dari SAW, ambil yang teratas
+    if (weakTopics && weakTopics.length > 0) {
+      return weakTopics[0];
+    }
+    
+    // 2. Jika tidak ada weakTopics, cari practice yang belum lulus dari passed_practices
+    const passedPractices = profile?.passed_practices || [];
+    const practiceMapping = [
+      { id: 'grammar_master', categoryKey: 'grammar' },
+      { id: 'vocab_power', categoryKey: 'vocab' },
+      { id: 'reading_pro', categoryKey: 'reading' },
+      { id: 'cloze_challenge', categoryKey: 'cloze' }
+    ];
+    
+    const nextIncomplete = practiceMapping.find(p => !passedPractices.includes(p.categoryKey));
+    if (nextIncomplete) {
+      return examPackages.find(pkg => pkg.id === nextIncomplete.id);
+    }
+    
+    // Fallback ke grammar
+    return examPackages.find(pkg => pkg.id === 'grammar_master');
+  };
+
+  const activeOverallPkg = getActiveOverallPackage();
+
+  // Saring paket ujian lama untuk direview (hanya yang levelnya berada DI BAWAH level aktif user)
+  const reviewExams = examPackages.filter((p) => {
+    if (p.type !== 'ujian') return false;
+    if (p.id === 'kickstart_diagnostic') return false;
+    
+    const targetCefr = packageTargetCefr[p.id];
+    if (!targetCefr) return false;
+    
+    const userCefrIdx = CEFR_LEVELS_LADDER.indexOf(userCefr);
+    const targetCefrIdx = CEFR_LEVELS_LADDER.indexOf(targetCefr);
+    
+    return targetCefrIdx < userCefrIdx;
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -232,6 +345,10 @@ const Dashboard = () => {
       const { data, error } = await db.getExamResults(profile?.id);
       if (error) throw error;
       if (data && data.length > 0) {
+        // Cek apakah sudah menyelesaikan Ujian Diagnostik
+        const completedDiagnostic = data.some(exam => exam.package_id === 'kickstart_diagnostic');
+        setHasDiagnostic(completedDiagnostic);
+
         setExamHistory(data.slice(0, 5));
         const totalExams = data.length;
         const totalScore = data.reduce((sum, exam) => sum + exam.score_total, 0);
@@ -239,11 +356,65 @@ const Dashboard = () => {
         const lastExamDate = data[0].created_at;
         setStats({ totalExams, averageScore, lastExamDate });
 
-        // Kalkulasi Rekomendasi SAW Real
-        const latestScores = data[0].category_scores;
-        if (latestScores && Object.keys(latestScores).length > 0) {
-          const recommendations = calculateSAWPriority(latestScores);
-          const mappedTopics = recommendations.slice(0, 2).map(rec => {
+        // Aggregation logic for last 5 exams (to prevent single-skill override)
+        const lastExams = data.slice(0, 5);
+        const categoriesList = ['grammar', 'vocab', 'reading', 'cloze'];
+        const aggregatedScores = {};
+
+        categoriesList.forEach(cat => {
+          let scoreSum = 0;
+          let testedCount = 0;
+          const aggregatedDiffStats = {
+            1: { correct: 0, total: 0 },
+            2: { correct: 0, total: 0 },
+            3: { correct: 0, total: 0 }
+          };
+
+          lastExams.forEach(exam => {
+            const catData = exam.category_scores?.[cat];
+            if (catData && typeof catData === 'object') {
+              const diffStats = catData.difficultyStats;
+              const hasTested = diffStats && (
+                (diffStats[1]?.total || 0) + 
+                (diffStats[2]?.total || 0) + 
+                (diffStats[3]?.total || 0)
+              ) > 0;
+
+              if (hasTested) {
+                scoreSum += catData.score || 0;
+                testedCount++;
+
+                for (let lvl = 1; lvl <= 3; lvl++) {
+                  if (diffStats[lvl]) {
+                    aggregatedDiffStats[lvl].correct += diffStats[lvl].correct || 0;
+                    aggregatedDiffStats[lvl].total += diffStats[lvl].total || 0;
+                  }
+                }
+              }
+            }
+          });
+
+          if (testedCount > 0) {
+            aggregatedScores[cat] = {
+              score: Math.round(scoreSum / testedCount),
+              difficultyStats: aggregatedDiffStats
+            };
+          }
+        });
+
+        // Kalkulasi Rekomendasi SAW Real dengan Aggregated Scores (Hanya jika diagnostik sudah selesai)
+        const finalScoresForSaw = Object.keys(aggregatedScores).length > 0 ? aggregatedScores : data[0].category_scores;
+        if (completedDiagnostic && finalScoresForSaw && Object.keys(finalScoresForSaw).length > 0) {
+          const recommendations = calculateSAWPriority(finalScoresForSaw);
+          // Hanya rekomendasikan topik yang benar-benar lemah (skor < 80 dan priorityScore > 0) dan belum lulus
+          const passedPractices = profile?.passed_practices || [];
+          const actualWeakRecommendations = recommendations.filter(rec => 
+            rec.rawScore < 80 && 
+            rec.priorityScore > 0 && 
+            !passedPractices.includes(rec.categoryKey)
+          );
+
+          const mappedTopics = actualWeakRecommendations.slice(0, 2).map(rec => {
             const practiceId = rec.categoryKey === 'grammar' ? 'grammar_master' : 
                                rec.categoryKey === 'vocab' ? 'vocab_power' :
                                rec.categoryKey === 'reading' ? 'reading_pro' : 'cloze_challenge';
@@ -254,7 +425,14 @@ const Dashboard = () => {
             };
           }).filter(p => p.id !== undefined);
           setWeakTopics(mappedTopics);
+        } else {
+          setWeakTopics([]);
         }
+      } else {
+        setHasDiagnostic(false);
+        setStats({ totalExams: 0, averageScore: 0, lastExamDate: null });
+        setExamHistory([]);
+        setWeakTopics([]);
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -262,6 +440,43 @@ const Dashboard = () => {
       // Pastikan setLoading dipanggil terlepas dari error atau return awal
       setLoading(false);
     }
+  };
+
+  const handleResetDemo = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Reset Data Demo',
+      message: 'Apakah Anda yakin ingin me-reset data demo? Semua riwayat ujian Anda akan dihapus untuk mensimulasikan user baru.',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setLoading(true);
+          const { error: deleteError } = await db.deleteExamResults(profile.id);
+          if (deleteError) throw deleteError;
+
+          const freshProfile = {
+            cefr_level: 'A1',
+            passed_practices: [],
+            skill_levels: { grammar: 'A1', vocab: 'A1', reading: 'A1', cloze: 'A1' }
+          };
+
+          const { error: profileError } = await db.updateProfile(profile.id, freshProfile);
+          if (profileError) throw profileError;
+
+          updateLocalProfile(freshProfile);
+          setStats({ totalExams: 0, averageScore: 0, lastExamDate: null });
+          setHasDiagnostic(false);
+          setExamHistory([]);
+          setWeakTopics([]);
+        } catch (error) {
+          console.error('Error resetting demo:', error);
+          alert('Gagal me-reset: ' + error.message);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
   };
 
   const syncQueuedResults = async () => {
@@ -306,7 +521,7 @@ const Dashboard = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F2ECD8' }}>
-        <div className="text-center">
+        <div className="text-center flex flex-col items-center justify-center">
           <ShieldIcon size={40} />
           <p className="mt-4 text-lg italic" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
             Memuat dashboard...
@@ -318,7 +533,26 @@ const Dashboard = () => {
 
   // ── Package card untuk ujian (non-diagnostic) ──
   const PackageCard = ({ pkg }) => {
-    const locked = isPackageLocked(pkg.minCefr);
+    const locked = isPackageLocked(pkg);
+
+    // Dapatkan pesan penjelasan jika terkunci (Point 3)
+    let lockMessage = '🔒 Terkunci';
+    if (locked) {
+      if (stats.totalExams === 0) {
+        lockMessage = '🔒 Selesaikan Diagnostic';
+      } else {
+        const targetCefr = packageTargetCefr[pkg.id];
+        const userCefrIdx = CEFR_LEVELS_LADDER.indexOf(userCefr);
+        const targetCefrIdx = CEFR_LEVELS_LADDER.indexOf(targetCefr);
+
+        if (targetCefrIdx > userCefrIdx) {
+          lockMessage = `🔒 Butuh Level ${targetCefr}`;
+        } else if (targetCefrIdx === userCefrIdx) {
+          const passedCount = profile?.passed_practices?.length || 0;
+          lockMessage = `🔒 Lulus Latihan (${passedCount}/4)`;
+        }
+      }
+    }
 
     return (
       <div
@@ -382,7 +616,7 @@ const Dashboard = () => {
             }
           }}
         >
-          {locked ? <span>🔒 Kunci ({pkg.minCefr})</span> : 'Mulai'}
+          {locked ? <span>{lockMessage}</span> : 'Mulai'}
         </button>
       </div>
     );
@@ -473,6 +707,16 @@ const Dashboard = () => {
                 <span className="text-white font-black text-xs md:text-sm tracking-widest">{userCefr}</span>
               </div>
 
+              {/* Reset Demo Button (Dev Mode only) */}
+              {import.meta.env.DEV && (
+                <button
+                  onClick={handleResetDemo}
+                  className="px-2 md:px-3 py-1 md:py-1.5 text-[10px] md:text-xs font-bold rounded-sm transition-all flex items-center gap-1 border border-red-500 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white"
+                >
+                  <span>⚡</span> Reset
+                </button>
+              )}
+
               {/* Desktop-only Actions */}
               <div className="hidden md:flex items-stretch gap-3">
                 <button
@@ -523,49 +767,221 @@ const Dashboard = () => {
           <div className="px-5 md:px-8 py-8 md:py-10 relative z-10">
             <div className="flex flex-col lg:flex-row items-center lg:items-center justify-between gap-6 md:gap-8 text-center lg:text-left">
               {/* Left content */}
-              <div className="flex-1 flex flex-col items-center lg:items-start">
-                {/* Label */}
-                <div className="flex items-center gap-2 mb-3 md:mb-4">
-                  <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest px-2 md:py-1 rounded-sm" style={{ background: 'rgba(191,10,48,0.8)', color: '#fff' }}>
-                    ✦ Mulai Di Sini
-                  </span>
-                </div>
+              <div className="flex-1 flex flex-col items-center lg:items-start w-full">
+                {(() => {
+                  const passedCount = profile?.passed_practices?.length || 0;
+                  let heroState = 'practice';
+                  if (!hasDiagnostic) {
+                    heroState = 'diagnostic';
+                  } else if (userCefr === 'C1/C2') {
+                    heroState = 'mastered';
+                  } else if (passedCount >= 4) {
+                    heroState = 'levelup';
+                  }
 
-                <h2 className="text-white text-2xl md:text-4xl font-bold leading-tight mb-1" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
-                  Kickstart Diagnostic
-                </h2>
-                <p className="text-xs md:text-base italic mb-4 md:mb-1" style={{ fontFamily: "'IM Fell English',serif", color: '#C9A84C' }}>
-                  "The Level Check"
-                </p>
-                <p className="hidden md:block text-sm leading-relaxed mb-6 max-w-lg" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                  Tes komprehensif untuk mengukur kemampuan awal dan membentuk profil belajarmu.
-                </p>
+                  const nextLevelMap = {
+                    'A1': 'A2 (Pre-Intermediate)',
+                    'A2': 'B1 (Intermediate)',
+                    'B1': 'B2 (Upper-Intermediate)',
+                    'B2': 'C1/C2 (Advanced)',
+                  };
+                  const nextLevel = nextLevelMap[userCefr] || 'C1/C2';
+                  const recommendedPractice = getNextRecommendedPractice();
 
-                {/* Meta info */}
-                <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8">
-                  {[
-                    { icon: '🕒', label: '60m' },
-                    { icon: '📄', label: '50 soal' },
-                    { icon: '📊', label: 'Mixed' },
-                  ].map(({ icon, label }) => (
-                    <div key={label} className="flex items-center gap-1.5 md:gap-2">
-                      <span className="text-sm md:text-base">{icon}</span>
-                      <span className="text-[11px] md:text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>
-                        {label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                  const practiceStatus = [
+                    { name: 'Grammar', id: 'grammar_master', key: 'grammar', icon: '📝' },
+                    { name: 'Vocabulary', id: 'vocab_power', key: 'vocab', icon: '📚' },
+                    { name: 'Reading', id: 'reading_pro', key: 'reading', icon: '👁️' },
+                    { name: 'Cloze', id: 'cloze_challenge', key: 'cloze', icon: '✏️' }
+                  ];
 
-                {/* CTA */}
-                <button
-                  onClick={() => startExam('kickstart_diagnostic')}
-                  className={`w-full md:w-auto px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold rounded-sm transition-all flex items-center justify-center gap-2 ${!navigator.onLine ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-                  style={{ background: '#1A4FAD', color: '#fff', boxShadow: !navigator.onLine ? 'none' : '0 4px 16px rgba(26,79,173,0.4)' }}
-                  disabled={!navigator.onLine}
-                >
-                  {!navigator.onLine ? 'Butuh Koneksi Internet' : 'Mulai Diagnostic'}
-                </button>
+                  if (heroState === 'diagnostic') {
+                    return (
+                      <>
+                        <div className="flex items-center gap-2 mb-3 md:mb-4">
+                          <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest px-2 md:py-1 rounded-sm" style={{ background: 'rgba(191,10,48,0.8)', color: '#fff' }}>
+                            ✦ Mulai Di Sini
+                          </span>
+                        </div>
+                        <h2 className="text-white text-2xl md:text-4xl font-bold leading-tight mb-1" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
+                          {activeOverallPkg?.name || 'Kickstart Diagnostic'}
+                        </h2>
+                        <p className="text-xs md:text-base italic mb-4 md:mb-1" style={{ fontFamily: "'IM Fell English',serif", color: '#C9A84C' }}>
+                          "{activeOverallPkg?.uniqueName || 'The Level Check'}"
+                        </p>
+                        <p className="text-sm leading-relaxed mb-6 max-w-lg text-stone-300">
+                          {activeOverallPkg?.description || 'Tes komprehensif untuk mengukur kemampuan awal dan membentuk profil belajarmu.'}
+                        </p>
+                        
+                        <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8">
+                          {[
+                            { icon: '🕒', label: `${activeOverallPkg?.duration || 60}m` },
+                            { icon: '📄', label: `${activeOverallPkg?.questions || 50} soal` },
+                            { icon: '📊', label: activeOverallPkg?.category || 'Diagnostic' },
+                          ].map(({ icon, label }) => (
+                            <div key={label} className="flex items-center gap-1.5 md:gap-2">
+                              <span className="text-sm md:text-base">{icon}</span>
+                              <span className="text-[11px] md:text-sm font-semibold text-stone-200">
+                                {label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={() => startExam(activeOverallPkg.id)}
+                          className="w-full md:w-auto px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold rounded-sm transition-all flex items-center justify-center gap-2"
+                          style={{ 
+                            background: '#1A4FAD', 
+                            color: '#fff', 
+                            boxShadow: '0 4px 16px rgba(26,79,173,0.4)' 
+                          }}
+                        >
+                          Mulai Ujian Diagnostic
+                        </button>
+                      </>
+                    );
+                  }
+
+                  if (heroState === 'practice') {
+                    return (
+                      <>
+                        <div className="flex items-center gap-2 mb-3 md:mb-4">
+                          <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest px-2 md:py-1 rounded-sm" style={{ background: 'rgba(201,168,76,0.85)', color: '#fff' }}>
+                            ✦ Progres Latihan: {passedCount}/4 Lulus
+                          </span>
+                        </div>
+                        <h2 className="text-white text-2xl md:text-4xl font-bold leading-tight mb-1" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
+                          Latihan Penguatan Skill (Level {userCefr})
+                        </h2>
+                        <p className="text-xs md:text-base italic mb-4 md:mb-1" style={{ fontFamily: "'IM Fell English',serif", color: '#C9A84C' }}>
+                          "Persiapan Kenaikan Level"
+                        </p>
+                        <p className="text-sm leading-relaxed mb-4 max-w-lg text-stone-300">
+                          Selesaikan ke-4 latihan skill dengan nilai minimal 70 untuk membuka Ujian Kenaikan Level.
+                        </p>
+
+                        {/* Kartu Status Latihan */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2 mb-6 w-full max-w-3xl">
+                          {practiceStatus.map((item) => {
+                            const isPassed = profile?.passed_practices?.includes(item.key);
+                            const isRecommended = recommendedPractice?.id === item.id;
+                            return (
+                              <div 
+                                key={item.id}
+                                onClick={() => startExam(item.id)}
+                                className="p-3 rounded-sm cursor-pointer transition-all duration-200 text-left"
+                                style={{
+                                  background: isRecommended ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.05)',
+                                  border: isRecommended ? '1.5px solid #C9A84C' : '1px solid rgba(255,255,255,0.1)',
+                                  boxShadow: isRecommended ? '0 0 10px rgba(201,168,76,0.2)' : 'none'
+                                }}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-xs font-bold text-white">{item.icon} {item.name}</span>
+                                  {isRecommended && (
+                                    <span className="text-[7px] font-black px-1 py-0.5 rounded-sm bg-[#C9A84C] text-[#0A2463]">
+                                      REKOMENDASI
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] mt-2 font-bold" style={{ color: isPassed ? '#4ADE80' : '#A8A29E' }}>
+                                  {isPassed ? '✓ Lulus (>=70)' : '⏳ Belum Selesai'}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Rekomendasi Utama Card */}
+                        {recommendedPractice && (
+                          <div className="p-4 rounded-sm border border-l-4 w-full max-w-3xl text-left mb-2" style={{ background: 'rgba(201,168,76,0.08)', borderColor: 'rgba(201,168,76,0.3)', borderLeftColor: '#C9A84C' }}>
+                            <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#C9A84C]">Rekomendasi Latihan Selanjutnya (Analisis SAW)</h4>
+                            <p className="text-white font-bold text-base mt-1">{recommendedPractice.name}</p>
+                            <p className="text-xs text-stone-300 mt-1">{recommendedPractice.description}</p>
+                            <button 
+                              onClick={() => startExam(recommendedPractice.id)}
+                              className="mt-3 px-5 py-2 text-xs font-bold rounded-sm text-[#0A2463] bg-[#C9A84C] hover:bg-[#dfbe61] transition-all"
+                            >
+                              Mulai Latihan Sekarang &rarr;
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    );
+                  }
+
+                  if (heroState === 'levelup') {
+                    return (
+                      <>
+                        <div className="flex items-center gap-2 mb-3 md:mb-4">
+                          <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest px-2 md:py-1 rounded-sm" style={{ background: 'rgba(22,163,74,0.9)', color: '#fff' }}>
+                            ✦ Ujian Terbuka
+                          </span>
+                        </div>
+                        <h2 className="text-white text-2xl md:text-4xl font-bold leading-tight mb-1" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
+                          Ujian Kenaikan Level: Target {nextLevel}
+                        </h2>
+                        <p className="text-xs md:text-base italic mb-4 md:mb-1" style={{ fontFamily: "'IM Fell English',serif", color: '#C9A84C' }}>
+                          "Siap Uji Kelayakan"
+                        </p>
+                        <p className="text-sm leading-relaxed mb-6 max-w-lg text-stone-300">
+                          Hebat! Persyaratan latihan telah dipenuhi ({passedCount}/4). Ambil ujian ini sekarang untuk mengevaluasi kelayakan kenaikan level Anda.
+                        </p>
+
+                        <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8">
+                          {[
+                            { icon: '🕒', label: `${activeOverallPkg?.duration || 45}m` },
+                            { icon: '📄', label: `${activeOverallPkg?.questions || 30} soal` },
+                            { icon: '📊', label: activeOverallPkg?.name || 'Kenaikan Level' },
+                          ].map(({ icon, label }) => (
+                            <div key={label} className="flex items-center gap-1.5 md:gap-2">
+                              <span className="text-sm md:text-base">{icon}</span>
+                              <span className="text-[11px] md:text-sm font-semibold text-stone-200">
+                                {label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={() => startExam(activeOverallPkg.id)}
+                          className="w-full md:w-auto px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold rounded-sm transition-all flex items-center justify-center gap-2"
+                          style={{ 
+                            background: '#16A34A', 
+                            color: '#fff', 
+                            boxShadow: '0 4px 16px rgba(22,163,74,0.4)' 
+                          }}
+                        >
+                          Mulai Ujian {activeOverallPkg.name}
+                        </button>
+                      </>
+                    );
+                  }
+
+                  if (heroState === 'mastered') {
+                    return (
+                      <>
+                        <div className="flex items-center gap-2 mb-3 md:mb-4">
+                          <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest px-2 md:py-1 rounded-sm" style={{ background: '#16A34A', color: '#fff' }}>
+                            ✦ Kemampuan Maksimal
+                          </span>
+                        </div>
+                        <h2 className="text-white text-2xl md:text-4xl font-bold leading-tight mb-1" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
+                          Tingkat Kemampuan Maksimal Terpenuhi!
+                        </h2>
+                        <p className="text-xs md:text-base italic mb-4 md:mb-1" style={{ fontFamily: "'IM Fell English',serif", color: '#C9A84C' }}>
+                          "Level C1/C2 (Proficient)"
+                        </p>
+                        <p className="text-sm leading-relaxed mb-6 max-w-lg text-stone-300">
+                          Selamat! Kamu telah menguasai level tertinggi. Terus asah kemampuan bahasamu dengan melakukan latihan mandiri kapan saja.
+                        </p>
+                      </>
+                    );
+                  }
+
+                  return null;
+                })()}
               </div>
 
               {/* Right: decorative crest (hidden small mobile) */}
@@ -610,7 +1026,7 @@ const Dashboard = () => {
         </div>
 
         {/* ══════════ REKOMENDASI TOPIK LEMAH ══════════ */}
-        {weakTopics.length > 0 && (
+        {hasDiagnostic && weakTopics.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-4">
               <span className="text-base">⚠️</span>
@@ -656,49 +1072,54 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* LEFT: Paket Ujian + Latihan */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Ujian */}
-            <section>
-              <div className="flex items-center gap-2 mb-1">
-                <svg className="w-4 h-4" fill="none" stroke="#1A4FAD" viewBox="0 0 24 24" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <h2 className="font-bold" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463', fontSize: 18 }}>
-                  Ujian — Diagnostic & Proficiency
-                </h2>
-              </div>
-              <GoldRule opacity={0.6} />
-              <div className="space-y-3 mt-4">
-                {examPackages
-                  .filter((p) => p.type === 'ujian' && p.id !== 'kickstart_diagnostic')
-                  .map((pkg) => (
+            {/* Ujian — Review & Latihan Ulang (Hanya muncul jika siswa memiliki ujian tingkat di bawah level aktifnya) */}
+            {reviewExams.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-1">
+                  <svg className="w-4 h-4" fill="none" stroke="#1A4FAD" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h2 className="font-bold" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463', fontSize: 18 }}>
+                    Ujian — Review & Latihan Ulang
+                  </h2>
+                </div>
+                <GoldRule opacity={0.6} />
+                <div className="space-y-3 mt-4">
+                  {reviewExams.map((pkg) => (
                     <PackageCard key={pkg.id} pkg={pkg} />
                   ))}
-              </div>
-            </section>
+                </div>
+              </section>
+            )}
 
             {/* Latihan */}
             <section>
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setIsLatihanExpanded(!isLatihanExpanded)}>
                   <svg className="w-4 h-4" fill="none" stroke="#BF0A30" viewBox="0 0 24 24" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  <h2 className="font-bold" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463', fontSize: 18 }}>
+                  <h2 className="font-bold flex items-center gap-2" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463', fontSize: 18 }}>
                     Latihan — Daily & Focused
+                    <span className="text-xs font-normal text-stone-500">
+                      {isLatihanExpanded ? '▲ Sembunyikan' : '▼ Tampilkan'}
+                    </span>
                   </h2>
                 </div>
-                <span className="md:hidden text-[10px] font-bold text-crimson animate-pulse">Geser ➜</span>
+                {isLatihanExpanded && <span className="md:hidden text-[10px] font-bold text-crimson animate-pulse">Geser ➜</span>}
               </div>
               <GoldRule opacity={0.6} />
-              <div className="flex md:grid md:grid-cols-3 gap-3 mt-4 overflow-x-auto pb-4 md:pb-0 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-                {examPackages
-                  .filter((p) => p.type === 'latihan')
-                  .map((pkg) => (
-                    <div key={pkg.id} className="min-w-[140px] md:min-w-0 flex-1">
-                      <SkillCard pkg={pkg} />
-                    </div>
-                  ))}
-              </div>
+              {isLatihanExpanded && (
+                <div className="flex md:grid md:grid-cols-3 gap-3 mt-4 overflow-x-auto pb-4 md:pb-0 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                  {examPackages
+                    .filter((p) => p.type === 'latihan')
+                    .map((pkg) => (
+                      <div key={pkg.id} className="min-w-[140px] md:min-w-0 flex-1">
+                        <SkillCard pkg={pkg} />
+                      </div>
+                    ))}
+                </div>
+              )}
             </section>
           </div>
 
@@ -752,6 +1173,14 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmVariant={confirmModal.confirmVariant}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

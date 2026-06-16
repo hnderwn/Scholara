@@ -28,6 +28,8 @@
 - 📊 **Intelligent Dashboard**: Pantau skor CEFR, statistik progres, dan riwayat ujian.
 - 📱 **Premium Mobile Experience**: Navigasi bawah (Bottom Nav) yang intuitif dan responsif.
 - 🎯 **SAW Recommendations**: Algoritma cerdas yang menganalisis area terlemah untuk prioritas belajar.
+- 🛡️ **Exam Protection & Safe Navigation**: Mencegah penutupan tab secara tidak sengaja dan memblokir tombol kembali browser saat ujian sedang berlangsung melalui dialog konfirmasi kustom (`ConfirmModal`).
+- 🔒 **Diagnostic First Lock**: Mewajibkan siswa menyelesaikan Ujian Diagnostik terlebih dahulu sebelum dapat mengakses latihan materi lainnya.
 - 📖 **Offline Dictionary**: Kamus bahasa Inggris lengkap yang tetap bisa diakses tanpa internet.
 - 💾 **PWA Support**: Install aplikasi di HP/Desktop dan akses materi secara offline.
 
@@ -37,10 +39,12 @@
 - 📈 **CEFR Mapping**: Penilaian standar internasional (A1-C2) secara otomatis berdasarkan performa ujian.
 - 🔄 **Offline Sync**: Mengerjakan ujian saat offline? Data akan otomatis sinkron ke Supabase saat koneksi kembali.
 - 📦 **IndexedDB Storage**: Penyimpanan lokal yang kuat untuk data ujian dan kamus ribuan kata.
+- 🧪 **Core Logic Testing**: Validasi logika algoritma SAW dan pemetaan CEFR menggunakan unit test otomatis (`vitest`).
 
 ### 🛠️ Untuk Admin
 
 - 🎛️ **Smart Question Management**: Kelola soal dengan tingkat kesulitan dan bobot poin yang dinamis.
+- 🛠️ **Debug Mode Control**: Mengaktifkan/menonaktifkan tombol bantuan debug (benar/salah/acak) untuk pengguna tertentu secara dinamis melalui dashboard manajemen pengguna (Users).
 - 📈 **Advanced Analytics**: Grafik performa siswa dan log aktivitas sistem yang komprehensif.
 
 ---
@@ -121,6 +125,9 @@ npm install
 
 # Jalankan server development
 npm run dev
+
+# Jalankan unit testing (Vitest)
+npm run test
 ```
 
 ### 3. Konfigurasi Environment (`.env`)

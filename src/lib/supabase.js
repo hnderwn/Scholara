@@ -67,6 +67,8 @@ export const db = {
   // Exam Results
   saveExamResult: (result) => supabase.from('exam_results').insert(result),
 
+  deleteExamResults: (userId) => supabase.from('exam_results').delete().eq('user_id', userId),
+
   getExamResults: (userId = null) => {
     let query = supabase.from('exam_results').select(`*, profiles(full_name, school)`).order('created_at', { ascending: false });
 

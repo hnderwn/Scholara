@@ -166,7 +166,7 @@ const Login = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-parchment">
-        <div className="text-center">
+        <div className="text-center flex flex-col items-center justify-center">
           <ShieldCrest size={40} />
           <div className="mt-4 font-display text-navy text-lg font-semibold">Memeriksa sesi...</div>
           <div className="mt-1 font-body text-sm text-ink-muted">Mohon tunggu sebentar</div>
@@ -181,7 +181,7 @@ const Login = () => {
       <div className="min-h-screen flex items-center justify-center bg-parchment px-4">
         <div className="max-w-md w-full parchment-card gold-border rounded-sm shadow-xl overflow-hidden">
           <div className="red-rule h-[3px] w-full" />
-          <div className="p-8 text-center">
+          <div className="p-8 text-center flex flex-col items-center justify-center">
             <ShieldCrest size={36} />
             <h2 className="font-display text-navy text-xl font-bold mt-4 mb-2">Menyiapkan Profil</h2>
             <div className="flex justify-center mb-6 mt-4">
@@ -204,7 +204,7 @@ const Login = () => {
       <div className="min-h-screen flex items-center justify-center bg-parchment px-4">
         <div className="max-w-md w-full parchment-card gold-border rounded-sm shadow-xl overflow-hidden">
           <div className="red-rule h-[3px] w-full" />
-          <div className="p-8 text-center bg-[#FAF6EC]">
+          <div className="p-8 text-center bg-[#FAF6EC] flex flex-col items-center justify-center">
             <ShieldCrest size={36} />
             <h2 className="font-display text-navy text-xl font-bold mt-4 mb-2">Aktivasi Diperlukan</h2>
             <div className="flex justify-center mb-6 mt-4">

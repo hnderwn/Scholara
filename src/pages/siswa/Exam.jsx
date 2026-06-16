@@ -9,6 +9,7 @@ import { determineCEFR, calculateOverallCEFR } from '../../lib/saw';
 import QuestionCard from '../../components/Exam/QuestionCard';
 import Timer from '../../components/ui/Timer';
 import Button from '../../components/ui/Button';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 
 // ── Reusable dividers (Sesuai dengan tema) ──
 const RedRule = ({ opacity = 1 }) => <div style={{ height: 2, background: 'linear-gradient(90deg,transparent,#BF0A30 25%,#BF0A30 75%,transparent)', opacity }} />;
@@ -17,7 +18,7 @@ const GoldRule = ({ opacity = 1 }) => <div style={{ height: 1, background: 'line
 const Exam = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { profile, user } = useAuth();
+  const { profile, user, updateLocalProfile } = useAuth();
   const { questions, answers, currentQuestionIndex, endTime, duration, isActive, currentQuestion, totalQuestions, startExam, setAnswer, goToQuestion, nextQuestion, prevQuestion, finishExam, formatTime, getRemainingTime, clearExam } = useExam();
 
   const [loading, setLoading] = useState(true);
@@ -33,6 +34,42 @@ const Exam = () => {
       window.autoSubmitExam = null;
     };
   }, [answers, questions]);
+
+  // Mencegah refresh/tutup tab tidak sengaja
+  useEffect(() => {
+    if (!isActive) return;
+
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = 'Ujian sedang berlangsung. Apakah Anda yakin ingin keluar?';
+      return e.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isActive]);
+
+  // Intersep tombol back browser (safeguard)
+  useEffect(() => {
+    if (!isActive) return;
+
+    // Push dummy history entry ke stack
+    window.history.pushState(null, null, window.location.href);
+
+    const handlePopState = (e) => {
+      // Masukkan kembali dummy entry agar tombol back tertahan lagi jika ditekan berikutnya
+      window.history.pushState(null, null, window.location.href);
+      // Tampilkan modal kustom pembatalan ujian
+      setShowConfirmCancel(true);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isActive]);
 
   useEffect(() => {
     loadExamQuestions();
@@ -124,19 +161,38 @@ const Exam = () => {
         }
       } else if (packageId === 'daily_speed_check') {
         examQuestions = shuffleArray(examQuestions).slice(0, 15);
-      } else if (packageId === 'basic_mastery') {
-        const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 24);
-        const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 6);
-        examQuestions = shuffleArray([...l1, ...l2]);
-      } else if (packageId === 'intermediate_path') {
-        const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 6);
-        const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 18);
-        const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 6);
-        examQuestions = shuffleArray([...l1, ...l2, ...l3]);
-      } else if (packageId === 'advanced_pro') {
-        const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 6);
-        const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 24);
-        examQuestions = shuffleArray([...l2, ...l3]);
+      } else if (['basic_mastery', 'pre_intermediate', 'intermediate_path', 'upper_intermediate', 'advanced_pro'].includes(packageId)) {
+        // Helper to fill questions up to target count if not enough specific difficulties exist
+        const fillToTarget = (selected, pool, targetCount) => {
+          if (selected.length >= targetCount) return selected;
+          const selectedIds = new Set(selected.map(q => q.id));
+          const remainingPool = shuffleArray(pool.filter(q => !selectedIds.has(q.id)));
+          return [...selected, ...remainingPool.slice(0, targetCount - selected.length)];
+        };
+
+        if (packageId === 'basic_mastery') {
+          const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 40);
+          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 10);
+          examQuestions = fillToTarget([...l1, ...l2], examQuestions, 50);
+        } else if (packageId === 'pre_intermediate') {
+          const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 15);
+          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 35);
+          examQuestions = fillToTarget([...l1, ...l2], examQuestions, 50);
+        } else if (packageId === 'intermediate_path') {
+          const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 10);
+          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 30);
+          const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 10);
+          examQuestions = fillToTarget([...l1, ...l2, ...l3], examQuestions, 50);
+        } else if (packageId === 'upper_intermediate') {
+          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 20);
+          const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 30);
+          examQuestions = fillToTarget([...l2, ...l3], examQuestions, 50);
+        } else if (packageId === 'advanced_pro') {
+          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 10);
+          const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 40);
+          examQuestions = fillToTarget([...l2, ...l3], examQuestions, 50);
+        }
+        examQuestions = shuffleArray(examQuestions);
       } else {
         examQuestions = shuffleArray(examQuestions).slice(0, 50);
       }
@@ -220,7 +276,8 @@ const Exam = () => {
       if (!user?.id) throw new Error('User not authenticated');
 
       const packageId = searchParams.get('paket');
-      const examType = packageId === 'practice' ? 'practice' : 'tryout';
+      const isPractice = ['grammar_master', 'vocab_power', 'reading_pro', 'cloze_challenge', 'practice', 'daily_speed_check'].includes(packageId);
+      const examType = isPractice ? 'practice' : 'tryout';
 
       const dbPayload = {
         user_id: user.id,
@@ -236,20 +293,66 @@ const Exam = () => {
       };
 
       let newSkillLevels = { ...(profile?.skill_levels || { grammar: 'A1', vocab: 'A1', reading: 'A1', cloze: 'A1' }) };
-      
-      ['grammar', 'vocab', 'reading', 'cloze'].forEach(cat => {
-        if (examResult.scores[cat]?.difficultyStats) {
-           const stats = examResult.scores[cat].difficultyStats;
-           const hasTested = (stats[1]?.total || 0) + (stats[2]?.total || 0) + (stats[3]?.total || 0) > 0;
-           if (hasTested) {
-             newSkillLevels[cat] = determineCEFR(stats);
-           }
-        }
-      });
-
       let newOverallCefr = profile?.cefr_level || 'A1';
-      if (packageId === 'kickstart_diagnostic' || packageId === 'basic_mastery' || packageId === 'intermediate_path' || packageId === 'advanced_pro') {
-         newOverallCefr = calculateOverallCEFR(examResult.scores);
+      let newPassedPractices = [...(profile?.passed_practices || [])];
+
+      const packageTargetCefr = {
+        basic_mastery: 'A1',
+        pre_intermediate: 'A2',
+        intermediate_path: 'B1',
+        upper_intermediate: 'B2',
+        advanced_pro: 'C1'
+      };
+
+      const targetCefr = packageTargetCefr[packageId];
+      const isInitialDiagnostic = packageId === 'kickstart_diagnostic';
+      // Hanya perbarui skala CEFR jika ini adalah Ujian Utama pertama (Diagnostic) ATAU Ujian Utama setingkat level aktif user
+      const shouldUpdateCefr = examType === 'tryout' && (isInitialDiagnostic || targetCefr === newOverallCefr);
+
+      if (shouldUpdateCefr) {
+        ['grammar', 'vocab', 'reading', 'cloze'].forEach(cat => {
+          if (examResult.scores[cat]?.difficultyStats) {
+             const stats = examResult.scores[cat].difficultyStats;
+             const hasTested = (stats[1]?.total || 0) + (stats[2]?.total || 0) + (stats[3]?.total || 0) > 0;
+             if (hasTested) {
+               newSkillLevels[cat] = determineCEFR(stats);
+             }
+          }
+        });
+
+        newOverallCefr = calculateOverallCEFR(examResult.scores);
+
+        // Batasi level CEFR maksimal berdasarkan jenis paket soal
+        if (packageId === 'basic_mastery' && ['B2', 'C1/C2'].includes(newOverallCefr)) {
+          newOverallCefr = 'B1';
+        } else if (packageId === 'pre_intermediate' && ['B2', 'C1/C2'].includes(newOverallCefr)) {
+          newOverallCefr = 'B1';
+        } else if (packageId === 'intermediate_path' && ['C1/C2'].includes(newOverallCefr)) {
+          newOverallCefr = 'B2';
+        }
+      }
+
+      // Reset progres latihan jika mengambil Ujian Utama setingkat (baik lulus maupun gagal)
+      if (examType === 'tryout' && shouldUpdateCefr) {
+         newPassedPractices = [];
+      } else if (examType === 'practice') {
+         // Logika pelacakan kelulusan latihan skill
+         let categoryKey = null;
+         if (packageId === 'grammar_master') categoryKey = 'grammar';
+         else if (packageId === 'vocab_power') categoryKey = 'vocab';
+         else if (packageId === 'reading_pro') categoryKey = 'reading';
+         else if (packageId === 'cloze_challenge') categoryKey = 'cloze';
+         else if (packageId === 'practice') {
+           const catParam = searchParams.get('category')?.toLowerCase();
+           if (catParam === 'vocabulary') categoryKey = 'vocab';
+           else if (catParam) categoryKey = catParam;
+         }
+
+         if (categoryKey && examResult.scores.total >= 70) {
+           if (!newPassedPractices.includes(categoryKey)) {
+             newPassedPractices.push(categoryKey);
+           }
+         }
       }
 
       if (navigator.onLine) {
@@ -259,12 +362,22 @@ const Exam = () => {
         // Update profile
         await db.updateProfile(user.id, {
            cefr_level: newOverallCefr,
-           skill_levels: newSkillLevels
+           skill_levels: newSkillLevels,
+           passed_practices: newPassedPractices
         });
       } else {
         console.log('Exam: Offline, queuing result');
         await localDB.queueResult(dbPayload);
-        // Offline profile updates could be handled by localDB, but we keep it simple for now
+      }
+
+      // Perbarui profil secara lokal di state dan localStorage agar UI PWA beradaptasi langsung
+      updateLocalProfile({
+         cefr_level: newOverallCefr,
+         skill_levels: newSkillLevels,
+         passed_practices: newPassedPractices
+      });
+
+      if (!navigator.onLine) {
         alert('Ujian selesai! Karena kamu sedang offline, hasil ujian disimpan di perangkat dan akan otomatis disinkronkan saat terhubung internet.');
       }
 
@@ -275,6 +388,27 @@ const Exam = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /**
+   * @description Mengisi otomatis jawaban soal untuk keperluan pengujian alur
+   * @param {string} type - Tipe pengisian: 'correct' (benar semua), 'incorrect' (salah semua), 'random' (acak)
+   * @returns {void}
+   */
+  const handleDebugAutoFill = (type = 'correct') => {
+    questions.forEach((q) => {
+      let ans = 'A';
+      if (type === 'correct') {
+        ans = q.correct_answer;
+      } else if (type === 'incorrect') {
+        const options = Object.keys(q.options || { A: 'A', B: 'B', C: 'C', D: 'D', E: 'E' });
+        ans = options.find(opt => opt !== q.correct_answer) || 'A';
+      } else {
+        const options = Object.keys(q.options || { A: 'A', B: 'B', C: 'C', D: 'D', E: 'E' });
+        ans = options[Math.floor(Math.random() * options.length)];
+      }
+      setAnswer(q.id, ans);
+    });
   };
 
   const handleOpenSubmit = () => {
@@ -335,6 +469,31 @@ const Exam = () => {
               </div>
 
               <div className="flex items-center space-x-3">
+                {/* Dev Mode Debug Helper */}
+                {(import.meta.env.DEV || profile?.is_debug_enabled || profile?.role === 'admin') && (
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50/10 border border-red-200/30 rounded-sm">
+                    <span className="text-[10px] font-bold text-[#C9A84C] font-mono">DEBUG:</span>
+                    <button
+                      onClick={() => handleDebugAutoFill('correct')}
+                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-mono text-[9px] font-bold rounded-sm transition-colors"
+                    >
+                      Benar
+                    </button>
+                    <button
+                      onClick={() => handleDebugAutoFill('incorrect')}
+                      className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-mono text-[9px] font-bold rounded-sm transition-colors"
+                    >
+                      Salah
+                    </button>
+                    <button
+                      onClick={() => handleDebugAutoFill('random')}
+                      className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-mono text-[9px] font-bold rounded-sm transition-colors"
+                    >
+                      Acak
+                    </button>
+                  </div>
+                )}
+
                 {/* Hierarki UX: Tombol Batal dibuat lebih "subtle" */}
                 <button onClick={() => setShowConfirmCancel(true)} className="text-xs font-bold uppercase tracking-wider transition-colors hover:underline" style={{ color: '#6B5A42' }}>
                   Batalkan
@@ -455,59 +614,28 @@ const Exam = () => {
       </div>
 
       {/* ════ MODAL KONFIRMASI KUMPULKAN ════ */}
-      {showConfirmSubmit && (
-        <div className="fixed inset-0 bg-[#0A2463]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-opacity">
-          <div className="bg-[#FAF6EC] rounded-sm max-w-md w-full border border-[#C8B99A] overflow-hidden shadow-2xl">
-            <RedRule />
-            <div className="p-6 md:p-8">
-              <h3 className="text-2xl font-bold mb-3" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
-                Kumpulkan Ujian?
-              </h3>
-              <p className="text-sm italic mb-6" style={{ fontFamily: "'IM Fell English',serif", color: '#6B5A42' }}>
-                Apakah Anda yakin ingin mengumpulkan ujian? Waktu tersisa <b style={{ color: '#BF0A30' }}>{formatTime(snapshotTimeLeft)}</b> lagi.
-              </p>
-              <div className="flex justify-end space-x-3 pt-4 border-t" style={{ borderColor: 'rgba(200,185,154,0.4)' }}>
-                <button onClick={() => setShowConfirmSubmit(false)} className="px-4 py-2 text-xs font-bold rounded-sm uppercase tracking-wider transition-colors" style={{ color: '#6B5A42', border: '1px solid #C8B99A' }}>
-                  Batal
-                </button>
-                <button
-                  onClick={handleSubmitExam}
-                  disabled={submitting}
-                  className="px-5 py-2 text-xs font-bold text-white rounded-sm uppercase tracking-wider transition-colors"
-                  style={{ backgroundColor: '#1A4FAD', opacity: submitting ? 0.7 : 1 }}
-                >
-                  {submitting ? 'Menyimpan...' : 'Ya, Kumpulkan'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        isOpen={showConfirmSubmit}
+        title="Kumpulkan Ujian?"
+        message={`Apakah Anda yakin ingin mengumpulkan ujian? Waktu tersisa ${formatTime(snapshotTimeLeft)} lagi.`}
+        confirmText={submitting ? 'Menyimpan...' : 'Ya, Kumpulkan'}
+        cancelText="Batal"
+        confirmVariant="primary"
+        onConfirm={handleSubmitExam}
+        onCancel={() => setShowConfirmSubmit(false)}
+      />
 
       {/* ════ MODAL KONFIRMASI BATALKAN ════ */}
-      {showConfirmCancel && (
-        <div className="fixed inset-0 bg-[#0A2463]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-opacity">
-          <div className="bg-[#FAF6EC] rounded-sm max-w-md w-full border border-[#BF0A30] overflow-hidden shadow-2xl">
-            <RedRule />
-            <div className="p-6 md:p-8">
-              <h3 className="text-2xl font-bold mb-3" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#BF0A30' }}>
-                Batalkan Ujian?
-              </h3>
-              <p className="text-sm italic mb-6" style={{ fontFamily: "'IM Fell English',serif", color: '#6B5A42' }}>
-                Apakah Anda yakin ingin membatalkan ujian ini? Semua progres jawaban Anda akan hilang dan tidak dapat dikembalikan.
-              </p>
-              <div className="flex justify-end space-x-3 pt-4 border-t" style={{ borderColor: 'rgba(200,185,154,0.4)' }}>
-                <button onClick={() => setShowConfirmCancel(false)} className="px-4 py-2 text-xs font-bold rounded-sm uppercase tracking-wider transition-colors" style={{ color: '#0A2463', border: '1px solid #C8B99A' }}>
-                  Kembali Lanjut
-                </button>
-                <button onClick={handleCancelExam} className="px-5 py-2 text-xs font-bold text-white rounded-sm uppercase tracking-wider transition-colors" style={{ backgroundColor: '#BF0A30' }}>
-                  Ya, Batalkan
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        isOpen={showConfirmCancel}
+        title="Batalkan Ujian?"
+        message="Apakah Anda yakin ingin membatalkan ujian ini? Semua progres jawaban Anda akan hilang dan tidak dapat dikembalikan."
+        confirmText="Ya, Batalkan"
+        cancelText="Kembali Lanjut"
+        confirmVariant="danger"
+        onConfirm={handleCancelExam}
+        onCancel={() => setShowConfirmCancel(false)}
+      />
     </div>
   );
 };

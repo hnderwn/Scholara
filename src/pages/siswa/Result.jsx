@@ -52,15 +52,17 @@ const Result = () => {
   useEffect(() => {
     const init = async () => {
       try {
+        let currentResult = null;
         if (location.state?.examResult) {
           console.log('Using result from state:', location.state.examResult);
-          setExamResult(location.state.examResult);
-          const recommendations = calculateSAWPriority(location.state.examResult.scores);
-          setSawRecommendations(recommendations);
-          setLoading(false);
+          currentResult = location.state.examResult;
+          setExamResult(currentResult);
+        }
+        
+        if (user?.id) {
+          await loadRecommendationsAndResult(currentResult);
         } else {
-          console.log('No state, loading latest result for user:', user?.id);
-          await loadLatestResult();
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error in Result initialization:', error);
@@ -69,20 +71,21 @@ const Result = () => {
     };
 
     init();
-  }, [user]);
+  }, [user?.id]);
 
-  const loadLatestResult = async () => {
+  const loadRecommendationsAndResult = async (currentResult) => {
     try {
+      setLoading(true);
       if (!user?.id) return;
 
       const { data, error } = await db.getExamResults(user.id);
-
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        const latest = data[0];
+      let latestResult = currentResult;
 
-        const result = {
+      if (!latestResult && data && data.length > 0) {
+        const latest = data[0];
+        latestResult = {
           id: latest.id,
           startTime: latest.created_at,
           endTime: latest.created_at,
@@ -95,17 +98,34 @@ const Result = () => {
           },
           answers: latest.answers,
         };
+        setExamResult(latestResult);
+      }
 
-        if (!result.scores.total) result.scores.total = 0;
+      if (latestResult) {
+        const categoriesList = ['grammar', 'vocab', 'reading', 'cloze'];
+        const scoresForSaw = {};
 
-        setExamResult(result);
-        const recommendations = calculateSAWPriority(result.scores);
+        categoriesList.forEach(cat => {
+          const scoreData = latestResult.scores[cat];
+          if (scoreData && typeof scoreData === 'object') {
+            scoresForSaw[cat] = scoreData;
+          } else {
+            scoresForSaw[cat] = {
+              score: typeof scoreData === 'number' ? scoreData : 0,
+              difficultyStats: {
+                1: { correct: 0, total: 1 },
+                2: { correct: 0, total: 0 },
+                3: { correct: 0, total: 0 }
+              }
+            };
+          }
+        });
+
+        const recommendations = calculateSAWPriority(scoresForSaw);
         setSawRecommendations(recommendations);
-      } else {
-        console.log('No results found in DB');
       }
     } catch (error) {
-      console.error('Error loading result from DB:', error);
+      console.error('Error loading result and recommendations:', error);
     } finally {
       setLoading(false);
     }
@@ -195,11 +215,7 @@ const Result = () => {
                   /100
                 </span>
               </div>
-              {examResult && (
-                <div className="flex items-center bg-[#1A4FAD] px-5 py-2.5 rounded-md border-2 border-[#0A2463] shadow-md">
-                  <span className="text-white text-3xl font-black tracking-widest">{overallCEFR}</span>
-                </div>
-              )}
+
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-bold uppercase tracking-widest" style={{ color: '#6B5A42' }}>
               <span className="bg-[#EDE4CC] px-3 py-1 rounded-sm border border-[#C8B99A]">Durasi: {formatDuration(examResult.duration)}</span>
@@ -258,9 +274,6 @@ const Result = () => {
                               <h3 className="text-[11px] font-black uppercase tracking-widest" style={{ color: '#0A2463' }}>
                                 {category === 'vocab' ? 'Kosakata' : category === 'grammar' ? 'Tata Bahasa' : category === 'reading' ? 'Membaca' : category === 'cloze' ? 'Rumpang' : category}
                               </h3>
-                              <span className="px-1.5 py-0.5 border rounded-sm text-[9px] font-black" style={{ backgroundColor: '#EDE4CC', color: '#0A2463', borderColor: '#C8B99A' }}>
-                                {cefr}
-                              </span>
                             </div>
                             <p className="mt-1 text-[11px] font-bold" style={{ color: '#6B5A42' }}>
                               {getScoreLabel(score)}

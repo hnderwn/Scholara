@@ -55,6 +55,8 @@ export function calculateSAWPriority(categoryData, weights = DEFAULT_WEIGHTS) {
       category: formatCategoryName(category),
       categoryKey: category,
       rawScore: score,
+      cost: Math.round(rawCost * 100),
+      weight: weight,
       priorityScore: Math.round(priorityScore * 1000) / 1000,
       color: getPriorityColor(priorityScore),
       label: getPriorityLabel(priorityScore),
@@ -84,11 +86,11 @@ export function determineCEFR(difficultyStats) {
   const l3Correct = difficultyStats[3]?.correct || 0;
   const l3Rate = l3Total > 0 ? l3Correct / l3Total : 0;
 
-  // Logika Mahir (Proficient)
-  if (l3Rate >= 0.7 && l2Rate >= 0.8) return 'C1/C2';
+  // Logika Mahir (Proficient) - Memerlukan soal Level 3 diuji
+  if (l3Total > 0 && l3Rate >= 0.7 && l2Rate >= 0.8) return 'C1/C2';
 
-  // Logika Mandiri (Independent)
-  if (l3Rate >= 0.3 || l2Rate >= 0.7) return 'B2';
+  // Logika Mandiri (Independent) - Memerlukan soal Level 3 diuji untuk B2
+  if (l3Total > 0 && (l3Rate >= 0.3 || l2Rate >= 0.7)) return 'B2';
   if (l2Rate >= 0.4 || (l1Rate >= 0.9 && l2Total === 0)) return 'B1';
 
   // Logika Dasar (Basic)

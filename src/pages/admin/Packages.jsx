@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 
 // ── Shared helpers ──
 const GoldRule = ({ opacity = 1 }) => <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,#C8B99A 30%,#C8B99A 70%,transparent)', opacity }} />;
@@ -41,6 +42,13 @@ const Packages = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmVariant: 'primary',
+    onConfirm: () => {},
+  });
   const [formData, setFormData] = useState({
     name: '',
     unique_name: '',
@@ -123,21 +131,29 @@ const Packages = () => {
     }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`Hapus paket "${name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
-    try {
-      const { error } = await db.deletePackage(id);
-      if (error) throw error;
-      await db.createAuditLog({
-        action: 'DELETE_PACKAGE',
-        target_id: id,
-        description: `Menghapus paket: ${name}`,
-      });
-      loadPackages();
-    } catch (error) {
-      console.error('Error deleting package:', error);
-      alert('Gagal menghapus: ' + error.message);
-    }
+  const handleDelete = (id, name) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Paket Ujian',
+      message: `Apakah Anda yakin ingin menghapus paket "${name}"? Tindakan ini tidak dapat dibatalkan.`,
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await db.deletePackage(id);
+          if (error) throw error;
+          await db.createAuditLog({
+            action: 'DELETE_PACKAGE',
+            target_id: id,
+            description: `Menghapus paket: ${name}`,
+          });
+          loadPackages();
+        } catch (error) {
+          console.error('Error deleting package:', error);
+          alert('Gagal menghapus: ' + error.message);
+        }
+      },
+    });
   };
 
   return (
@@ -292,7 +308,6 @@ const Packages = () => {
             ))}
       </div>
 
-      {/* ══════════ MODAL ══════════ */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(10,36,99,0.35)', backdropFilter: 'blur(2px)' }}>
           <div className="w-full max-w-xl rounded-sm overflow-hidden shadow-2xl" style={{ background: '#FAF6EC', border: '1px solid #C9A84C', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -433,6 +448,15 @@ const Packages = () => {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmVariant={confirmModal.confirmVariant}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };

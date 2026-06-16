@@ -280,6 +280,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  /**
+   * @description Memperbarui profil secara lokal di state dan localStorage cache
+   * @param {Object} updates - Objek berisi properti profil yang diperbarui
+   * @returns {void}
+   */
+  const updateLocalProfile = (updates) => {
+    setProfile((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...updates };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // Cek apakah pengguna memiliki peran tertentu
   const hasRole = (role) => {
     return profile?.role === role;
@@ -305,6 +319,7 @@ export const AuthProvider = ({ children }) => {
     isStudent,
     isOnline,
     fetchProfile,
+    updateLocalProfile,
     setError,
   };
 

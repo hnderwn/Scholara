@@ -3,6 +3,7 @@ import { db } from '../../lib/supabase';
 // Import UI components dipertahankan sesuai aslinya
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 
 // ── Reusable dividers (Sesuai dengan tema) ──
 const RedRule = ({ opacity = 1 }) => <div style={{ height: 2, background: 'linear-gradient(90deg,transparent,#BF0A30 25%,#BF0A30 75%,transparent)', opacity }} />;
@@ -13,6 +14,13 @@ const Users = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmVariant: 'primary',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     loadUsers();
@@ -31,28 +39,73 @@ const Users = () => {
     }
   };
 
-  const handleRoleChange = async (userId, newRole) => {
-    const confirmMsg = newRole === 'admin' ? 'Jadikan pengguna ini sebagai Admin? Mereka akan memiliki akses penuh ke sistem.' : 'Cabut akses Admin dari pengguna ini?';
+  const handleRoleChange = (userId, newRole) => {
+    const title = newRole === 'admin' ? 'Jadikan Admin' : 'Cabut Akses Admin';
+    const message = newRole === 'admin'
+      ? 'Apakah Anda yakin ingin menjadikan pengguna ini sebagai Admin? Mereka akan memiliki akses penuh ke sistem.'
+      : 'Apakah Anda yakin ingin mencabut akses Admin dari pengguna ini?';
 
-    if (!window.confirm(confirmMsg)) return;
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      confirmVariant: newRole === 'admin' ? 'primary' : 'danger',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await db.updateProfile(userId, { role: newRole });
+          if (error) throw error;
 
-    try {
-      const { error } = await db.updateProfile(userId, { role: newRole });
-      if (error) throw error;
+          // Update local state
+          setUsers(users.map((u) => (u.id === userId ? { ...u, role: newRole } : u)));
 
-      // Update local state
-      setUsers(users.map((u) => (u.id === userId ? { ...u, role: newRole } : u)));
+          // Log activity
+          await db.createAuditLog({
+            action: 'UPDATE_ROLE',
+            target_id: userId,
+            description: `Mengubah peran user ${userId} menjadi ${newRole}`,
+          });
+        } catch (error) {
+          console.error('Error updating role:', error);
+          alert('Gagal mengubah peran: ' + error.message);
+        }
+      },
+    });
+  };
 
-      // Log activity
-      await db.createAuditLog({
-        action: 'UPDATE_ROLE',
-        target_id: userId,
-        description: `Mengubah peran user ${userId} menjadi ${newRole}`,
-      });
-    } catch (error) {
-      console.error('Error updating role:', error);
-      alert('Gagal mengubah peran: ' + error.message);
-    }
+  const handleToggleDebug = (userId, currentStatus) => {
+    const newStatus = !currentStatus;
+    const title = newStatus ? 'Aktifkan Mode Debug' : 'Nonaktifkan Mode Debug';
+    const message = newStatus
+      ? 'Apakah Anda yakin ingin mengaktifkan Mode Debug untuk user ini? Mereka akan dapat menggunakan asisten pengisian otomatis jawaban.'
+      : 'Apakah Anda yakin ingin menonaktifkan Mode Debug untuk user ini?';
+
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      confirmVariant: newStatus ? 'primary' : 'danger',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const { error } = await db.updateProfile(userId, { is_debug_enabled: newStatus });
+          if (error) throw error;
+
+          // Update local state
+          setUsers(users.map((u) => (u.id === userId ? { ...u, is_debug_enabled: newStatus } : u)));
+
+          // Log activity
+          await db.createAuditLog({
+            action: 'TOGGLE_DEBUG',
+            target_id: userId,
+            description: `Mengubah mode debug user ${userId} menjadi ${newStatus ? 'AKTIF' : 'NONAKTIF'}`,
+          });
+        } catch (error) {
+          console.error('Error updating debug mode:', error);
+          alert('Gagal mengubah mode debug: ' + error.message);
+        }
+      },
+    });
   };
 
   const filteredUsers = users.filter((user) => {
@@ -119,6 +172,7 @@ const Users = () => {
                   <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Nama Lengkap</th>
                   <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Sekolah</th>
                   <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Peran</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Mode Debug</th>
                   <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Terdaftar Pada</th>
                   <th className="px-6 py-3.5 text-right text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Aksi</th>
                 </tr>
@@ -151,6 +205,19 @@ const Users = () => {
                         >
                           {user.role || 'siswa'}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleToggleDebug(user.id, user.is_debug_enabled)}
+                          className="px-2 py-1 rounded-sm text-[9px] font-black uppercase tracking-widest border transition-all hover:opacity-80"
+                          style={{
+                            backgroundColor: user.is_debug_enabled ? '#FEF3C7' : '#F3F4F6',
+                            color: user.is_debug_enabled ? '#92400E' : '#374151',
+                            borderColor: user.is_debug_enabled ? '#FDE68A' : '#E5E7EB',
+                          }}
+                        >
+                          {user.is_debug_enabled ? 'Aktif 🛠️' : 'Nonaktif'}
+                        </button>
                       </td>
                       <td className="px-6 py-4 text-xs font-mono text-[#6B5A42]">{new Date(user.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       <td className="px-6 py-4 text-right">
@@ -193,16 +260,29 @@ const Users = () => {
                       </div>
                       <div className="text-sm text-[#2C1F0E] font-medium leading-tight">{user.school || '—'}</div>
                     </div>
-                    <span
-                      className="px-2 py-0.5 rounded-sm text-[8px] font-black uppercase tracking-widest border"
-                      style={{
-                        backgroundColor: user.role === 'admin' ? '#E0E7FF' : '#D1FAE5',
-                        color: user.role === 'admin' ? '#3730A3' : '#065F46',
-                        borderColor: user.role === 'admin' ? '#C7D2FE' : '#A7F3D0',
-                      }}
-                    >
-                      {user.role || 'siswa'}
-                    </span>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span
+                        className="px-2 py-0.5 rounded-sm text-[8px] font-black uppercase tracking-widest border"
+                        style={{
+                          backgroundColor: user.role === 'admin' ? '#E0E7FF' : '#D1FAE5',
+                          color: user.role === 'admin' ? '#3730A3' : '#065F46',
+                          borderColor: user.role === 'admin' ? '#C7D2FE' : '#A7F3D0',
+                        }}
+                      >
+                        {user.role || 'siswa'}
+                      </span>
+                      <button
+                        onClick={() => handleToggleDebug(user.id, user.is_debug_enabled)}
+                        className="px-1.5 py-0.5 rounded-sm text-[8px] font-black uppercase tracking-widest border transition-all"
+                        style={{
+                          backgroundColor: user.is_debug_enabled ? '#FEF3C7' : '#F3F4F6',
+                          color: user.is_debug_enabled ? '#92400E' : '#374151',
+                          borderColor: user.is_debug_enabled ? '#FDE68A' : '#E5E7EB',
+                        }}
+                      >
+                        {user.is_debug_enabled ? 'Debug 🛠️' : 'No Debug'}
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-[10px] font-mono text-[#6B5A42]">{new Date(user.created_at).toLocaleDateString('id-ID')}</span>
@@ -229,6 +309,15 @@ const Users = () => {
           <div style={{ height: 2, background: 'linear-gradient(90deg,transparent,#C9A84C 25%,#C9A84C 75%,transparent)' }} />
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmVariant={confirmModal.confirmVariant}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 };
