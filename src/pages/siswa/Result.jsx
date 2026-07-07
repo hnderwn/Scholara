@@ -21,8 +21,7 @@ const Result = () => {
   const [loading, setLoading] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
   const [detailedQuestions, setDetailedQuestions] = useState([]);
-  const [isPracticeModalOpen, setIsPracticeModalOpen] = useState(false);
-  const [selectedPracticeCategory, setSelectedPracticeCategory] = useState(null);
+
   const [explanationLang, setExplanationLang] = useState('en');
 
   // Fetch detailed questions when examResult is available
@@ -149,7 +148,11 @@ const Result = () => {
     return `${mins}m ${secs}d`;
   };
 
+  const packageId = location.state?.examResult?.packageId || examResult?.scores?.package_id;
+  const isDiagnostic = packageId === 'kickstart_diagnostic';
   const overallCEFR = examResult ? calculateOverallCEFR(examResult.scores) : 'A1';
+
+
 
   if (loading) {
     return (
@@ -215,7 +218,16 @@ const Result = () => {
                   /100
                 </span>
               </div>
-
+              {isDiagnostic && (
+                <div className="flex flex-col items-center bg-[#EDE4CC]/60 border border-[#C8B99A]/50 px-5 py-2 rounded-sm">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-[#6B5A42] mb-0.5">
+                    Prediksi Level CEFR
+                  </span>
+                  <span className="text-3xl font-black text-[#0A2463]" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
+                    {overallCEFR}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-bold uppercase tracking-widest" style={{ color: '#6B5A42' }}>
               <span className="bg-[#EDE4CC] px-3 py-1 rounded-sm border border-[#C8B99A]">Durasi: {formatDuration(examResult.duration)}</span>
@@ -230,114 +242,108 @@ const Result = () => {
 
           {/* ══ ACTION BUTTONS ══ */}
           <div className="flex flex-wrap justify-center gap-4">
-            <Button variant="outline" onClick={() => navigate('/siswa/dashboard')}>
-              Kembali
+            <Button
+              variant="primary"
+              onClick={() => navigate('/siswa/dashboard')}
+            >
+              Kembali ke Dashboard
             </Button>
             <Button variant="secondary" onClick={() => setShowDetails(true)}>
               Lihat Pembahasan
             </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                const weakestRec = sawRecommendations[0];
-                if (weakestRec) {
-                  setSelectedPracticeCategory(weakestRec);
-                  setIsPracticeModalOpen(true);
-                }
-              }}
-            >
-              Latihan Area Lemah
-            </Button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* ══ CATEGORY BREAKDOWN ══ */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg">📈</span>
-                <h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
-                  Skor per Kategori
-                </h2>
-              </div>
-              <div className="space-y-4">
-                {Object.entries(examResult.scores)
-                  .filter(([category]) => category !== 'total')
-                  .map(([category, data]) => {
-                    const score = typeof data === 'object' ? data.score : data;
-                    const cefr = sawRecommendations.find((r) => r.categoryKey === category)?.cefrLevel || 'A1';
+          {isDiagnostic && (
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* ══ CATEGORY BREAKDOWN ══ */}
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-lg">📈</span>
+                    <h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
+                      Skor per Kategori
+                    </h2>
+                  </div>
+                  <div className="space-y-4">
+                    {Object.entries(examResult.scores)
+                      .filter(([category]) => category !== 'total' && category !== 'package_id')
+                      .map(([category, data]) => {
+                        const score = typeof data === 'object' ? data.score : data;
 
-                    return (
-                      <Card key={category} className="p-5 transition-transform hover:-translate-y-1">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <h3 className="text-[11px] font-black uppercase tracking-widest" style={{ color: '#0A2463' }}>
-                                {category === 'vocab' ? 'Kosakata' : category === 'grammar' ? 'Tata Bahasa' : category === 'reading' ? 'Membaca' : category === 'cloze' ? 'Rumpang' : category}
-                              </h3>
+                        return (
+                          <Card key={category} className="p-5 transition-transform hover:-translate-y-1">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <h3 className="text-[11px] font-black uppercase tracking-widest" style={{ color: '#0A2463' }}>
+                                    {category === 'vocab' ? 'Kosakata' : category === 'grammar' ? 'Tata Bahasa' : category === 'reading' ? 'Membaca' : category === 'cloze' ? 'Rumpang' : category}
+                                  </h3>
+                                </div>
+                                <p className="mt-1 text-[11px] font-bold" style={{ color: '#6B5A42' }}>
+                                  {getScoreLabel(score)}
+                                </p>
+                              </div>
+                              <div className="text-right flex items-baseline">
+                                <span className={`text-3xl font-black ${getScoreColor(score)}`} style={{ fontFamily: "'Cormorant Garamond',serif" }}>
+                                  {score}
+                                </span>
+                                <span className="text-sm font-bold ml-0.5" style={{ color: '#A8946C' }}>
+                                  /100
+                                </span>
+                              </div>
                             </div>
-                            <p className="mt-1 text-[11px] font-bold" style={{ color: '#6B5A42' }}>
-                              {getScoreLabel(score)}
-                            </p>
-                          </div>
-                          <div className="text-right flex items-baseline">
-                            <span className={`text-3xl font-black ${getScoreColor(score)}`} style={{ fontFamily: "'Cormorant Garamond',serif" }}>
-                              {score}
-                            </span>
-                            <span className="text-sm font-bold ml-0.5" style={{ color: '#A8946C' }}>
-                              /100
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-full h-1.5 rounded-sm" style={{ backgroundColor: '#EDE4CC' }}>
-                          <div
-                            className="h-1.5 rounded-sm transition-all duration-1000"
-                            style={{
-                              width: `${score}%`,
-                              backgroundColor: score >= 80 ? '#16A34A' : score >= 60 ? '#D97706' : '#BF0A30',
-                            }}
-                          />
-                        </div>
-                      </Card>
-                    );
-                  })}
-              </div>
-            </div>
+                            <div className="w-full h-1.5 rounded-sm" style={{ backgroundColor: '#EDE4CC' }}>
+                              <div
+                                className="h-1.5 rounded-sm transition-all duration-1000"
+                                style={{
+                                  width: `${score}%`,
+                                  backgroundColor: score >= 80 ? '#16A34A' : score >= 60 ? '#D97706' : '#BF0A30',
+                                }}
+                              />
+                            </div>
+                          </Card>
+                        );
+                      })}
+                  </div>
+                </div>
 
-            {/* ══ SAW RECOMMENDATIONS ══ */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg">🎯</span>
-                <h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
-                  Rekomendasi Prioritas Belajar
-                </h2>
+                {/* ══ SAW RECOMMENDATIONS ══ */}
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-lg">🎯</span>
+                    <h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
+                      Rekomendasi Prioritas Belajar
+                    </h2>
+                  </div>
+                  <div className="space-y-4">
+                    {sawRecommendations.map((rec, index) => (
+                      <ExpandableRecommendationCard key={rec.categoryKey} rec={rec} index={index} />
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="space-y-4">
-                {sawRecommendations.map((rec, index) => (
-                  <ExpandableRecommendationCard key={rec.categoryKey} rec={rec} index={index} />
-                ))}
-              </div>
-            </div>
-          </div>
 
-          {/* ══ EXPLANATION CARD ══ */}
-          <div className="mt-8">
-            <Card className="p-6 md:p-8">
-              <h3 className="text-lg font-bold mb-3" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
-                Bagaimana rekomendasi dihitung?
-              </h3>
-              <div className="text-sm space-y-2 leading-relaxed" style={{ color: '#2C1F0E' }}>
-                <p>
-                  Sistem kami menggunakan metode <b>SAW (Simple Additive Weighting)</b> untuk menghitung prioritas belajar:
-                </p>
-                <ul className="list-disc list-inside space-y-1.5 ml-2">
-                  <li>Skor akhir dihitung berdasarkan bobot soal (Level 1-3). Soal sulit (C1/C2) memberi poin lebih besar.</li>
-                  <li>Sistem mendeteksi level CEFR Anda (A1-C2) berdasarkan seberapa konsisten Anda menjawab benar di tiap tingkat kesulitan.</li>
-                  <li>Metode SAW memberikan prioritas lebih tinggi pada kategori yang masih memiliki kesalahan di level Dasar (A1/A2).</li>
-                  <li>Sistem menyarankan untuk fokus pada area dengan potensi peningkatan skor terbesar.</li>
-                </ul>
+              {/* ══ EXPLANATION CARD ══ */}
+              <div className="mt-8">
+                <Card className="p-6 md:p-8">
+                  <h3 className="text-lg font-bold mb-3" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
+                    Bagaimana rekomendasi dihitung?
+                  </h3>
+                  <div className="text-sm space-y-2 leading-relaxed" style={{ color: '#2C1F0E' }}>
+                    <p>
+                      Sistem kami menggunakan metode <b>SAW (Simple Additive Weighting)</b> untuk menghitung prioritas belajar:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1.5 ml-2">
+                      <li>Skor akhir dihitung berdasarkan bobot soal (Level 1-3). Soal sulit (C1/C2) memberi poin lebih besar.</li>
+                      <li>Sistem mendeteksi level CEFR Anda (A1-C2) berdasarkan seberapa konsisten Anda menjawab benar di tiap tingkat kesulitan.</li>
+                      <li>Metode SAW memberikan prioritas lebih tinggi pada kategori yang masih memiliki kesalahan di level Dasar (A1/A2).</li>
+                      <li>Sistem menyarankan untuk fokus pada area dengan potensi peningkatan skor terbesar.</li>
+                    </ul>
+                  </div>
+                </Card>
               </div>
-            </Card>
-          </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -465,45 +471,7 @@ const Result = () => {
         </div>
       )}
 
-      {/* ════ PRACTICE CONFIRMATION MODAL ════ */}
-      {isPracticeModalOpen && selectedPracticeCategory && (
-        <div className="fixed inset-0 bg-[#0A2463]/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-opacity">
-          <div className="bg-[#FAF6EC] rounded-sm w-full max-w-md border border-[#C8B99A] overflow-hidden shadow-2xl">
-            <RedRule />
-            <div className="p-6 md:p-8">
-              <h3 className="text-2xl font-bold mb-4" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
-                Latihan Fokus: {selectedPracticeCategory.category}
-              </h3>
 
-              <div className="border rounded-sm p-4 mb-5" style={{ backgroundColor: 'rgba(217,119,6,0.1)', borderColor: 'rgba(217,119,6,0.3)' }}>
-                <p className="text-[13px] font-bold" style={{ color: '#D97706' }}>
-                  Sistem mendeteksi skor {selectedPracticeCategory.category} Anda masih menjadi area kelemahan utama.
-                </p>
-              </div>
-
-              <p className="text-sm leading-relaxed mb-6" style={{ color: '#2C1F0E' }}>
-                Sesi khusus ini terdiri dari <b>15 soal adaptif</b> pada kategori {selectedPracticeCategory.category} untuk mempertajam pemahaman dan meningkatkan akurasi Anda.
-              </p>
-
-              <div className="flex justify-end space-x-3 pt-4 border-t" style={{ borderColor: 'rgba(200,185,154,0.4)' }}>
-                <Button variant="outline" onClick={() => setIsPracticeModalOpen(false)}>
-                  Nanti Saja
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    const catKey = selectedPracticeCategory.categoryKey;
-                    const dbCategory = catKey.charAt(0).toUpperCase() + catKey.slice(1);
-                    navigate(`/siswa/exam?paket=practice&category=${dbCategory}`);
-                  }}
-                >
-                  Mulai Latihan
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

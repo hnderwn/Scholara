@@ -165,7 +165,7 @@ const examPackages = [
 // ─────────────────────────────────────────────────
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { profile, isAdmin, signOut, updateLocalProfile } = useAuth();
+  const { profile, updateLocalProfile } = useAuth();
   const { clearExam } = useExam();
 
   const [stats, setStats] = useState({ totalExams: 0, averageScore: 0, lastExamDate: null });
@@ -183,15 +183,15 @@ const Dashboard = () => {
   const [hasDiagnostic, setHasDiagnostic] = useState(false);
 
   // Fungsi pengecekan CEFR & Tangga Progresi Ketat (Point 3)
-  const CEFR_LEVELS_LADDER = ['A1', 'A2', 'B1', 'B2', 'C1/C2'];
+  const CEFR_LEVELS_LADDER = ['A1/A2', 'B1/B2', 'C1/C2'];
   const packageTargetCefr = {
-    basic_mastery: 'A1',
-    pre_intermediate: 'A2',
-    intermediate_path: 'B1',
-    upper_intermediate: 'B2',
+    basic_mastery: 'A1/A2',
+    pre_intermediate: 'A1/A2',
+    intermediate_path: 'B1/B2',
+    upper_intermediate: 'B1/B2',
     advanced_pro: 'C1/C2'
   };
-  const userCefr = profile?.cefr_level || 'A1';
+  const userCefr = hasDiagnostic ? (profile?.cefr_level || 'A1/A2') : '-';
 
   /**
    * @description Menentukan apakah suatu paket ujian terkunci berdasarkan aturan progresi tangga CEFR
@@ -200,54 +200,22 @@ const Dashboard = () => {
    */
   const isPackageLocked = (pkg) => {
     if (pkg.id === 'kickstart_diagnostic') {
-      // Kunci Diagnostic jika sudah menyelesaikan Ujian Diagnostik
-      return hasDiagnostic;
+      // Diagnostik terkunci jika sudah profiling awal DAN belum menyelesaikan 4 latihan
+      const passedCount = profile?.passed_practices?.length || 0;
+      return hasDiagnostic && passedCount < 4;
     }
     
     if (pkg.type === 'latihan') {
       return false; // Latihan materi tidak pernah dikunci
     }
     
-    // Untuk user baru yang belum pernah diagnostik, kunci semua paket Tryout Utama
-    if (!hasDiagnostic) {
-      return true;
-    }
-
-    const targetCefr = packageTargetCefr[pkg.id];
-    if (!targetCefr) return false;
-    
-    const userCefrIdx = CEFR_LEVELS_LADDER.indexOf(userCefr);
-    const targetCefrIdx = CEFR_LEVELS_LADDER.indexOf(targetCefr);
-    
-    // Paket di atas level aktif user -> selalu terkunci
-    if (targetCefrIdx > userCefrIdx) {
-      return true;
-    }
-    
-    // Paket di bawah level aktif user -> selalu terbuka (review mode)
-    if (targetCefrIdx < userCefrIdx) {
-      return false;
-    }
-    
-    // Paket pada level aktif user -> terkunci sampai lulus minimal 4 latihan
-    const passedCount = profile?.passed_practices?.length || 0;
-    return passedCount < 4;
+    // Paket ujian utama tingkat lainnya dikunci/disembunyikan di bawah Opsi 1
+    return true;
   };
 
-  // Dapatkan paket Ujian Utama yang aktif berdasarkan level CEFR aktif user
+  // Dapatkan paket Ujian Utama yang aktif (selalu Kickstart Diagnostic di bawah Opsi 1)
   const getActiveOverallPackage = () => {
-    if (!hasDiagnostic) {
-      return examPackages.find(p => p.id === 'kickstart_diagnostic');
-    }
-    const targetIdMap = {
-      'A1': 'basic_mastery',
-      'A2': 'pre_intermediate',
-      'B1': 'intermediate_path',
-      'B2': 'upper_intermediate',
-      'C1/C2': 'advanced_pro'
-    };
-    const targetId = targetIdMap[userCefr] || 'basic_mastery';
-    return examPackages.find(p => p.id === targetId) || examPackages.find(p => p.id === 'basic_mastery');
+    return examPackages.find(p => p.id === 'kickstart_diagnostic');
   };
 
   const getNextRecommendedPractice = () => {
@@ -346,7 +314,11 @@ const Dashboard = () => {
       if (error) throw error;
       if (data && data.length > 0) {
         // Cek apakah sudah menyelesaikan Ujian Diagnostik
-        const completedDiagnostic = data.some(exam => exam.package_id === 'kickstart_diagnostic');
+        const completedDiagnostic = data.some(exam => 
+          exam.package_id === 'kickstart_diagnostic' || 
+          exam.category_scores?.package_id === 'kickstart_diagnostic' ||
+          exam.exam_type === 'tryout'
+        );
         setHasDiagnostic(completedDiagnostic);
 
         setExamHistory(data.slice(0, 5));
@@ -356,8 +328,9 @@ const Dashboard = () => {
         const lastExamDate = data[0].created_at;
         setStats({ totalExams, averageScore, lastExamDate });
 
-        // Aggregation logic for last 5 exams (to prevent single-skill override)
-        const lastExams = data.slice(0, 5);
+        // Aggregation logic for last 5 exams of type 'tryout' (to prevent single-skill override)
+        const tryoutExams = data.filter(exam => exam.exam_type === 'tryout');
+        const lastExams = tryoutExams.slice(0, 5);
         const categoriesList = ['grammar', 'vocab', 'reading', 'cloze'];
         const aggregatedScores = {};
 
@@ -452,8 +425,18 @@ const Dashboard = () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         try {
           setLoading(true);
+          // Hapus hasil dari DB dan offline queue IndexedDB
           const { error: deleteError } = await db.deleteExamResults(profile.id);
           if (deleteError) throw deleteError;
+          await localDB.clearQueue();
+
+          // Hapus semua flag submitted dari sessionStorage
+          for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const key = sessionStorage.key(i);
+            if (key && key.startsWith('submitted_')) {
+              sessionStorage.removeItem(key);
+            }
+          }
 
           const freshProfile = {
             cefr_level: 'A1',
@@ -489,10 +472,15 @@ const Dashboard = () => {
       console.log(`Dashboard: Syncing ${queued.length} queued results...`);
 
       for (const result of queued) {
-        // Hapus metadata IndexedDB sebelum simpan ke Supabase
-        const { id: queueId, status: queueStatus, ...payload } = result;
-        const { error } = await db.saveExamResult(payload);
+        const { id: queueId, examResult, profileUpdates } = result;
+        const finalExamPayload = examResult || result;
+
+        const { error } = await db.saveExamResult(finalExamPayload);
         if (!error) {
+          if (profileUpdates) {
+            const { error: profileError } = await db.updateProfile(profile.id, profileUpdates);
+            if (profileError) console.error('Dashboard Sync: Profile update failed', profileError);
+          }
           await localDB.removeQueuedResult(queueId);
         }
       }
@@ -510,7 +498,8 @@ const Dashboard = () => {
       alert('Maaf, paket ujian ini membutuhkan koneksi internet. Silakan beralih ke menu Kamus atau Latihan Harian.');
       return;
     }
-    navigate(`/siswa/exam?paket=${packageId}`);
+    sessionStorage.removeItem(`submitted_${packageId}`);
+    navigate(`/siswa/exam?paket=${packageId}`, { state: { fromDashboard: true } });
   };
 
   const formatDate = (dateString) => new Date(dateString).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -779,13 +768,6 @@ const Dashboard = () => {
                     heroState = 'levelup';
                   }
 
-                  const nextLevelMap = {
-                    'A1': 'A2 (Pre-Intermediate)',
-                    'A2': 'B1 (Intermediate)',
-                    'B1': 'B2 (Upper-Intermediate)',
-                    'B2': 'C1/C2 (Advanced)',
-                  };
-                  const nextLevel = nextLevelMap[userCefr] || 'C1/C2';
                   const recommendedPractice = getNextRecommendedPractice();
 
                   const practiceStatus = [
@@ -858,7 +840,7 @@ const Dashboard = () => {
                           "Persiapan Kenaikan Level"
                         </p>
                         <p className="text-sm leading-relaxed mb-4 max-w-lg text-stone-300">
-                          Selesaikan ke-4 latihan skill dengan nilai minimal 70 untuk membuka Ujian Kenaikan Level.
+                          Selesaikan ke-4 latihan skill dengan nilai minimal 80 untuk membuka Ujian Kenaikan Level.
                         </p>
 
                         {/* Kartu Status Latihan */}
@@ -886,7 +868,7 @@ const Dashboard = () => {
                                   )}
                                 </div>
                                 <p className="text-[10px] mt-2 font-bold" style={{ color: isPassed ? '#4ADE80' : '#A8A29E' }}>
-                                  {isPassed ? '✓ Lulus (>=70)' : '⏳ Belum Selesai'}
+                                  {isPassed ? '✓ Lulus (>=80)' : '⏳ Belum Selesai'}
                                 </p>
                               </div>
                             );
@@ -920,7 +902,7 @@ const Dashboard = () => {
                           </span>
                         </div>
                         <h2 className="text-white text-2xl md:text-4xl font-bold leading-tight mb-1" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
-                          Ujian Kenaikan Level: Target {nextLevel}
+                          Evaluasi Kenaikan Level (Ujian Diagnostik)
                         </h2>
                         <p className="text-xs md:text-base italic mb-4 md:mb-1" style={{ fontFamily: "'IM Fell English',serif", color: '#C9A84C' }}>
                           "Siap Uji Kelayakan"
@@ -1029,14 +1011,14 @@ const Dashboard = () => {
         {hasDiagnostic && weakTopics.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-base">⚠️</span>
+              <span className="text-base">🎯</span>
               <h2 className="font-bold text-base" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463', fontSize: 18 }}>
-                Rekomendasi Topik yang Perlu Ditingkatkan
+                Rekomendasi Latihan Sesuai Kemampuan
               </h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {weakTopics.map((topic) => (
-                <div key={topic.id} className="rounded-sm p-5 flex items-center justify-between" style={{ background: '#FAF6EC', border: '1px solid #C8B99A', borderLeft: '4px solid #BF0A30' }}>
+                <div key={topic.id} className="rounded-sm p-5 flex items-center justify-between" style={{ background: '#FAF6EC', border: '1px solid #C8B99A', borderLeft: '4px solid #C9A84C' }}>
                   <div>
                     <p className="font-bold text-base" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
                       {topic.name}
@@ -1044,12 +1026,12 @@ const Dashboard = () => {
                     <p className="text-xs mt-0.5" style={{ color: '#6B5A42' }}>
                       {topic.description}
                     </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="h-1.5 w-28 rounded-full overflow-hidden" style={{ background: '#EDE4CC' }}>
-                        <div className="h-full rounded-full" style={{ width: `${topic.weakScore}%`, background: '#BF0A30' }} />
-                      </div>
-                      <span className="text-[11px] font-bold" style={{ color: '#BF0A30' }}>
-                        {topic.weakScore}%
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <span className="text-[9px] px-2 py-0.5 rounded-sm font-bold bg-[#EDE4CC] text-[#0A2463] border border-[#C8B99A]">
+                        Tingkat: {userCefr}
+                      </span>
+                      <span className="text-[9px] px-2 py-0.5 rounded-sm font-bold bg-green-100 text-green-800 border border-green-200">
+                        Kesesuaian: Sangat Cocok
                       </span>
                     </div>
                   </div>

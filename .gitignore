@@ -22,6 +22,8 @@ dist-ssr
 *.crt
 
 # Custom User Files
+test_supabase.js
+progress.md
 
 # Build output & Caches
 build/

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useExam } from '../../context/ExamContext';
 import { db } from '../../lib/supabase';
@@ -18,11 +18,60 @@ const GoldRule = ({ opacity = 1 }) => <div style={{ height: 1, background: 'line
 const Exam = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { profile, user, updateLocalProfile } = useAuth();
+  const location = useLocation();
+  const { profile, user, loading: authLoading, updateLocalProfile } = useAuth();
   const { questions, answers, currentQuestionIndex, endTime, duration, isActive, currentQuestion, totalQuestions, startExam, setAnswer, goToQuestion, nextQuestion, prevQuestion, finishExam, formatTime, getRemainingTime, clearExam } = useExam();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [hasDiagnostic, setHasDiagnostic] = useState(false);
+  const [verifyingLock, setVerifyingLock] = useState(true);
+
+  // 1. Verifikasi status pengerjaan Ujian Diagnostik dari database secara asinkron
+  useEffect(() => {
+    const verifyLockStatus = async () => {
+      if (!user?.id) return;
+      try {
+        if (navigator.onLine) {
+          const { data: results } = await db.getExamResults(user.id);
+          const completedDiagnostic = results?.some(exam => 
+            exam.package_id === 'kickstart_diagnostic' || 
+            exam.category_scores?.package_id === 'kickstart_diagnostic' ||
+            exam.exam_type === 'tryout'
+          );
+          setHasDiagnostic(completedDiagnostic);
+        } else {
+          // Fallback offline menggunakan status profil
+          const offlineHasDiagnostic = profile?.cefr_level && profile.cefr_level !== '-' && profile.cefr_level !== 'null';
+          setHasDiagnostic(offlineHasDiagnostic);
+        }
+      } catch (err) {
+        console.error('Error verifying lock status:', err);
+      } finally {
+        setVerifyingLock(false);
+      }
+    };
+
+    if (!authLoading) {
+      if (user?.id) {
+        verifyLockStatus();
+      } else {
+        setVerifyingLock(false);
+      }
+    }
+  }, [user?.id, authLoading, profile?.cefr_level]);
+
+  // 2. Efek untuk memicu dialog alert jika Ujian Diagnostik terkunci
+  useEffect(() => {
+    if (authLoading || verifyingLock || submitting) return;
+
+    const packageId = searchParams.get('paket');
+    const passedCount = profile?.passed_practices?.length || 0;
+
+    if (packageId === 'kickstart_diagnostic' && hasDiagnostic && passedCount < 4) {
+      alert('Ujian Diagnostik terkunci. Selesaikan ke-4 latihan skill terlebih dahulu untuk membukanya kembali.');
+    }
+  }, [authLoading, verifyingLock, submitting, hasDiagnostic, searchParams, profile?.passed_practices]);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
   const [snapshotTimeLeft, setSnapshotTimeLeft] = useState(0);
@@ -58,7 +107,7 @@ const Exam = () => {
     // Push dummy history entry ke stack
     window.history.pushState(null, null, window.location.href);
 
-    const handlePopState = (e) => {
+    const handlePopState = () => {
       // Masukkan kembali dummy entry agar tombol back tertahan lagi jika ditekan berikutnya
       window.history.pushState(null, null, window.location.href);
       // Tampilkan modal kustom pembatalan ujian
@@ -72,8 +121,20 @@ const Exam = () => {
   }, [isActive]);
 
   useEffect(() => {
+    if (authLoading || verifyingLock) return;
+
+    const packageId = searchParams.get('paket');
+    const passedCount = profile?.passed_practices?.length || 0;
+    const isLocked = !submitting && packageId === 'kickstart_diagnostic' && hasDiagnostic && passedCount < 4;
+    const isSubmitted = !submitting && sessionStorage.getItem(`submitted_${packageId}`) === 'true';
+    const isDirectAccess = !submitting && !isActive && !location.state?.fromDashboard;
+
+    if (isLocked || isSubmitted || isDirectAccess) {
+      return; // Jangan load soal jika akses tidak valid/terkunci/sudah dikumpulkan
+    }
+
     loadExamQuestions();
-  }, [searchParams]);
+  }, [searchParams, authLoading, verifyingLock, hasDiagnostic, isActive, location.state, submitting]);
 
   // Helper fungsi pengacak array (Fisher-Yates)
   const shuffleArray = (array) => {
@@ -131,10 +192,10 @@ const Exam = () => {
           const l3Pool = shuffleArray(filtered.filter(q => q.difficulty === 3));
 
           let l1Count = 0, l2Count = 0, l3Count = 0;
-          if (cefr === 'A1' || cefr === 'A2') {
+          if (cefr === 'A1/A2' || cefr === 'A1' || cefr === 'A2') {
             l1Count = Math.round(totalCount * 0.8);
             l2Count = Math.round(totalCount * 0.2);
-          } else if (cefr === 'B1' || cefr === 'B2') {
+          } else if (cefr === 'B1/B2' || cefr === 'B1' || cefr === 'B2') {
             l1Count = Math.round(totalCount * 0.2);
             l2Count = Math.round(totalCount * 0.6);
             l3Count = Math.round(totalCount * 0.2);
@@ -284,6 +345,7 @@ const Exam = () => {
         exam_type: examType,
         score_total: examResult.scores.total,
         category_scores: {
+          package_id: packageId,
           grammar: examResult.scores.grammar || 0,
           vocab: examResult.scores.vocab || 0,
           reading: examResult.scores.reading || 0,
@@ -310,25 +372,49 @@ const Exam = () => {
       const shouldUpdateCefr = examType === 'tryout' && (isInitialDiagnostic || targetCefr === newOverallCefr);
 
       if (shouldUpdateCefr) {
+        const levelRank = {
+          'A1/A2': 1,
+          'B1/B2': 2,
+          'C1/C2': 3
+        };
+
+        // 1. Perbarui skill levels dengan pencegahan downgrade (CEFR Lock)
         ['grammar', 'vocab', 'reading', 'cloze'].forEach(cat => {
           if (examResult.scores[cat]?.difficultyStats) {
              const stats = examResult.scores[cat].difficultyStats;
              const hasTested = (stats[1]?.total || 0) + (stats[2]?.total || 0) + (stats[3]?.total || 0) > 0;
              if (hasTested) {
-               newSkillLevels[cat] = determineCEFR(stats);
+               const calculatedSkillCefr = determineCEFR(stats);
+               const currentSkillRank = levelRank[profile?.skill_levels?.[cat]] || 0;
+               const newSkillRank = levelRank[calculatedSkillCefr] || 0;
+               
+               if (newSkillRank > currentSkillRank) {
+                 newSkillLevels[cat] = calculatedSkillCefr;
+               } else {
+                 newSkillLevels[cat] = profile?.skill_levels?.[cat] || 'A1/A2';
+               }
              }
           }
         });
 
-        newOverallCefr = calculateOverallCEFR(examResult.scores);
+        // 2. Perbarui overall CEFR dengan pencegahan downgrade (CEFR Lock)
+        const calculatedOverall = calculateOverallCEFR(examResult.scores);
+        const currentOverallRank = levelRank[profile?.cefr_level] || 0;
+        const newOverallRank = levelRank[calculatedOverall] || 0;
+
+        if (newOverallRank > currentOverallRank) {
+          newOverallCefr = calculatedOverall;
+        } else {
+          newOverallCefr = profile?.cefr_level || 'A1/A2';
+        }
 
         // Batasi level CEFR maksimal berdasarkan jenis paket soal
         if (packageId === 'basic_mastery' && ['B2', 'C1/C2'].includes(newOverallCefr)) {
-          newOverallCefr = 'B1';
+          newOverallCefr = 'B1/B2';
         } else if (packageId === 'pre_intermediate' && ['B2', 'C1/C2'].includes(newOverallCefr)) {
-          newOverallCefr = 'B1';
+          newOverallCefr = 'B1/B2';
         } else if (packageId === 'intermediate_path' && ['C1/C2'].includes(newOverallCefr)) {
-          newOverallCefr = 'B2';
+          newOverallCefr = 'B1/B2';
         }
       }
 
@@ -348,27 +434,35 @@ const Exam = () => {
            else if (catParam) categoryKey = catParam;
          }
 
-         if (categoryKey && examResult.scores.total >= 70) {
-           if (!newPassedPractices.includes(categoryKey)) {
-             newPassedPractices.push(categoryKey);
-           }
-         }
-      }
+          if (categoryKey && examResult.scores.total >= 80) {
+            if (!newPassedPractices.includes(categoryKey)) {
+              newPassedPractices.push(categoryKey);
+            }
+          }
+       }
 
-      if (navigator.onLine) {
-        const { error } = await db.saveExamResult(dbPayload);
-        if (error) throw error;
-        
-        // Update profile
-        await db.updateProfile(user.id, {
-           cefr_level: newOverallCefr,
-           skill_levels: newSkillLevels,
-           passed_practices: newPassedPractices
-        });
-      } else {
-        console.log('Exam: Offline, queuing result');
-        await localDB.queueResult(dbPayload);
-      }
+       if (navigator.onLine) {
+         const { error } = await db.saveExamResult(dbPayload);
+         if (error) throw error;
+         
+         // Update profile
+         const { error: profileError } = await db.updateProfile(user.id, {
+            cefr_level: newOverallCefr,
+            skill_levels: newSkillLevels,
+            passed_practices: newPassedPractices
+         });
+         if (profileError) throw profileError;
+       } else {
+         console.log('Exam: Offline, queuing result');
+         await localDB.queueResult({
+           examResult: dbPayload,
+           profileUpdates: {
+              cefr_level: newOverallCefr,
+              skill_levels: newSkillLevels,
+              passed_practices: newPassedPractices
+           }
+         });
+       }
 
       // Perbarui profil secara lokal di state dan localStorage agar UI PWA beradaptasi langsung
       updateLocalProfile({
@@ -381,11 +475,12 @@ const Exam = () => {
         alert('Ujian selesai! Karena kamu sedang offline, hasil ujian disimpan di perangkat dan akan otomatis disinkronkan saat terhubung internet.');
       }
 
-      navigate('/siswa/result', { state: { examResult } });
+      sessionStorage.setItem(`submitted_${packageId}`, 'true');
+      clearExam();
+      navigate('/siswa/result', { state: { examResult: { ...examResult, packageId } }, replace: true });
     } catch (error) {
       console.error('Error submitting exam:', error);
       alert(`Error submitting exam: ${error.message}`);
-    } finally {
       setSubmitting(false);
     }
   };
@@ -395,20 +490,43 @@ const Exam = () => {
    * @param {string} type - Tipe pengisian: 'correct' (benar semua), 'incorrect' (salah semua), 'random' (acak)
    * @returns {void}
    */
+  /**
+   * @description Mengisi otomatis jawaban soal untuk keperluan pengujian alur
+   * @param {string} type - Tipe pengisian: 'correct' (benar semua), 'incorrect' (salah semua), 'random' (acak), 'custom' (skor kustom)
+   * @returns {void}
+   */
   const handleDebugAutoFill = (type = 'correct') => {
-    questions.forEach((q) => {
+    let targetPercent = 100;
+    if (type === 'custom') {
+      const input = prompt('Masukkan target persentase nilai (0-100):', '80');
+      if (input === null) return;
+      targetPercent = parseFloat(input);
+      if (isNaN(targetPercent) || targetPercent < 0 || targetPercent > 100) {
+        alert('Persentase tidak valid!');
+        return;
+      }
+    } else if (type === 'incorrect') {
+      targetPercent = 0;
+    } else if (type === 'random') {
+      targetPercent = Math.random() * 100;
+    }
+
+    const total = questions.length;
+    const correctCount = Math.round((targetPercent / 100) * total);
+
+    questions.forEach((q, idx) => {
+      const isCorrect = idx < correctCount;
       let ans = 'A';
-      if (type === 'correct') {
+      if (isCorrect) {
         ans = q.correct_answer;
-      } else if (type === 'incorrect') {
-        const options = Object.keys(q.options || { A: 'A', B: 'B', C: 'C', D: 'D', E: 'E' });
-        ans = options.find(opt => opt !== q.correct_answer) || 'A';
       } else {
         const options = Object.keys(q.options || { A: 'A', B: 'B', C: 'C', D: 'D', E: 'E' });
-        ans = options[Math.floor(Math.random() * options.length)];
+        ans = options.find(opt => opt !== q.correct_answer) || 'A';
       }
       setAnswer(q.id, ans);
     });
+
+    // alert(`Debug Auto-Fill Berhasil: Mengisi ${correctCount} jawaban benar dari ${total} soal (${Math.round((correctCount / total) * 100)}%).`);
   };
 
   const handleOpenSubmit = () => {
@@ -425,6 +543,26 @@ const Exam = () => {
     clearExam();
     navigate('/siswa/dashboard');
   };
+
+  if (authLoading || verifyingLock) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F2ECD8' }}>
+        <p className="text-xl italic" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
+          Memverifikasi akses ujian...
+        </p>
+      </div>
+    );
+  }
+
+  const checkPackageId = searchParams.get('paket');
+  const checkPassedCount = profile?.passed_practices?.length || 0;
+  const checkIsLocked = !submitting && checkPackageId === 'kickstart_diagnostic' && hasDiagnostic && checkPassedCount < 4;
+  const checkIsSubmitted = !submitting && sessionStorage.getItem(`submitted_${checkPackageId}`) === 'true';
+  const checkIsDirectAccess = !submitting && !isActive && !location.state?.fromDashboard;
+
+  if (checkIsLocked || checkIsSubmitted || checkIsDirectAccess) {
+    return <Navigate to="/siswa/dashboard" replace />;
+  }
 
   if (loading) {
     return (
@@ -490,6 +628,12 @@ const Exam = () => {
                       className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-mono text-[9px] font-bold rounded-sm transition-colors"
                     >
                       Acak
+                    </button>
+                    <button
+                      onClick={() => handleDebugAutoFill('custom')}
+                      className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white font-mono text-[9px] font-bold rounded-sm transition-colors"
+                    >
+                      Set Skor
                     </button>
                   </div>
                 )}

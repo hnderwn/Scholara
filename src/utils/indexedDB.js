@@ -81,4 +81,11 @@ export const localDB = {
     store.delete(id);
     return new Promise((resolve) => (tx.oncomplete = () => resolve()));
   },
+  async clearQueue() {
+    const db = await openDB();
+    const tx = db.transaction(STORES.RESULTS_QUEUE, 'readwrite');
+    const store = tx.objectStore(STORES.RESULTS_QUEUE);
+    store.clear();
+    return new Promise((resolve) => (tx.oncomplete = () => resolve()));
+  },
 };

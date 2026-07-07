@@ -28,15 +28,16 @@
 - 📊 **Intelligent Dashboard**: Pantau skor CEFR, statistik progres, dan riwayat ujian.
 - 📱 **Premium Mobile Experience**: Navigasi bawah (Bottom Nav) yang intuitif dan responsif.
 - 🎯 **SAW Recommendations**: Algoritma cerdas yang menganalisis area terlemah untuk prioritas belajar.
-- 🛡️ **Exam Protection & Safe Navigation**: Mencegah penutupan tab secara tidak sengaja dan memblokir tombol kembali browser saat ujian sedang berlangsung melalui dialog konfirmasi kustom (`ConfirmModal`).
-- 🔒 **Diagnostic First Lock**: Mewajibkan siswa menyelesaikan Ujian Diagnostik terlebih dahulu sebelum dapat mengakses latihan materi lainnya.
+- 🛡️ **Exam Protection & Safe Navigation**: Mencegah penutupan tab secara tidak sengaja, memblokir tombol kembali browser saat ujian sedang berlangsung melalui dialog konfirmasi kustom (`ConfirmModal`), serta mencegah re-entry ujian yang sudah diserahkan (submit) dengan validasi aman berbasis parameter rute dan `sessionStorage`.
+- 🔒 **Diagnostic First Lock & Adaptive Flow**: Mewajibkan siswa menyelesaikan Ujian Diagnostik terlebih dahulu sebelum dapat mengakses latihan materi lainnya. Ketika 4 materi latihan terselesaikan dengan skor >= 80, Ujian Diagnostik dibuka kembali untuk kenaikan tingkat.
 - 📖 **Offline Dictionary**: Kamus bahasa Inggris lengkap yang tetap bisa diakses tanpa internet.
 - 💾 **PWA Support**: Install aplikasi di HP/Desktop dan akses materi secara offline.
 
 ### ⚡ Fitur Teknis & Algoritma
 
 - 🧮 **Simple Additive Weighting (SAW)**: Perhitungan presisi untuk menentukan kategori mana yang paling membutuhkan perbaikan.
-- 📈 **CEFR Mapping**: Penilaian standar internasional (A1-C2) secara otomatis berdasarkan performa ujian.
+- 📈 **CEFR Mapping**: Penilaian standar internasional yang dikelompokkan ke dalam 3 skala utama (`A1/A2`, `B1/B2`, dan `C1/C2`) secara otomatis berdasarkan performa ujian.
+- 🔑 **CEFR Lock (Anti-Regression)**: Perlindungan agar tingkat kemahiran CEFR siswa tidak turun (downgrade) meskipun mendapatkan nilai rendah di pengerjaan ujian berikutnya.
 - 🔄 **Offline Sync**: Mengerjakan ujian saat offline? Data akan otomatis sinkron ke Supabase saat koneksi kembali.
 - 📦 **IndexedDB Storage**: Penyimpanan lokal yang kuat untuk data ujian dan kamus ribuan kata.
 - 🧪 **Core Logic Testing**: Validasi logika algoritma SAW dan pemetaan CEFR menggunakan unit test otomatis (`vitest`).

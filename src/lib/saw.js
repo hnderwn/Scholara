@@ -72,7 +72,7 @@ export function calculateSAWPriority(categoryData, weights = DEFAULT_WEIGHTS) {
  * Menentukan Level CEFR berdasarkan performa tingkat kesulitan
  */
 export function determineCEFR(difficultyStats) {
-  if (!difficultyStats) return 'A1';
+  if (!difficultyStats) return 'A1/A2';
 
   const l1Total = difficultyStats[1]?.total || 0;
   const l1Correct = difficultyStats[1]?.correct || 0;
@@ -86,16 +86,15 @@ export function determineCEFR(difficultyStats) {
   const l3Correct = difficultyStats[3]?.correct || 0;
   const l3Rate = l3Total > 0 ? l3Correct / l3Total : 0;
 
-  // Logika Mahir (Proficient) - Memerlukan soal Level 3 diuji
+  // Logika C1/C2 (Proficient)
   if (l3Total > 0 && l3Rate >= 0.7 && l2Rate >= 0.8) return 'C1/C2';
 
-  // Logika Mandiri (Independent) - Memerlukan soal Level 3 diuji untuk B2
-  if (l3Total > 0 && (l3Rate >= 0.3 || l2Rate >= 0.7)) return 'B2';
-  if (l2Rate >= 0.4 || (l1Rate >= 0.9 && l2Total === 0)) return 'B1';
+  // Logika B1/B2 (Independent)
+  if (l3Total > 0 && (l3Rate >= 0.3 || l2Rate >= 0.7)) return 'B1/B2';
+  if (l2Rate >= 0.4 || (l1Rate >= 0.9 && l2Total === 0)) return 'B1/B2';
 
-  // Logika Dasar (Basic)
-  if (l1Rate >= 0.6) return 'A2';
-  return 'A1';
+  // Logika A1/A2 (Basic)
+  return 'A1/A2';
 }
 
 /**
