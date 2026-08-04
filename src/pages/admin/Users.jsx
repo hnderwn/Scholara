@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../lib/supabase';
+import { exportToExcel, exportToPDF } from '../../utils/export';
 // Import UI components dipertahankan sesuai aslinya
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import ConfirmModal from '../../components/ui/ConfirmModal';
-
-// ── Reusable dividers (Sesuai dengan tema) ──
-const RedRule = ({ opacity = 1 }) => <div style={{ height: 2, background: 'linear-gradient(90deg,transparent,#BF0A30 25%,#BF0A30 75%,transparent)', opacity }} />;
-const GoldRule = ({ opacity = 1 }) => <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,#C8B99A 30%,#C8B99A 70%,transparent)', opacity }} />;
+import { RedRule, GoldRule } from '../../components/ui/Rules';
+import ExportDropdown from '../../components/admin/ExportDropdown';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
@@ -37,6 +36,52 @@ const Users = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExportExcel = () => {
+    const dataToExport = filteredUsers.map(user => ({
+      'Nama Lengkap': user.full_name || 'Anonymous',
+      'Sekolah': user.school || '—',
+      'Level CEFR': user.cefr_level || '—',
+      'Grammar Skill': user.skill_levels?.grammar || '—',
+      'Vocab Skill': user.skill_levels?.vocab || '—',
+      'Reading Skill': user.skill_levels?.reading || '—',
+      'Cloze Skill': user.skill_levels?.cloze || '—',
+      'Peran': user.role || 'siswa',
+      'Mode Debug': user.is_debug_enabled ? 'Aktif' : 'Nonaktif',
+      'Terdaftar Pada': new Date(user.created_at).toLocaleDateString('id-ID'),
+    }));
+    exportToExcel(dataToExport, `Daftar_Pengguna_${new Date().toISOString().split('T')[0]}.xlsx`, 'Daftar Pengguna');
+  };
+
+  const handleExportPDF = () => {
+    const columns = [
+      'Nama Lengkap',
+      'Sekolah',
+      'Level CEFR',
+      'Grammar',
+      'Vocab',
+      'Reading',
+      'Cloze',
+      'Peran',
+      'Debug',
+      'Terdaftar'
+    ];
+    
+    const rows = filteredUsers.map(user => [
+      user.full_name || 'Anonymous',
+      user.school || '—',
+      user.cefr_level || '—',
+      user.skill_levels?.grammar || '—',
+      user.skill_levels?.vocab || '—',
+      user.skill_levels?.reading || '—',
+      user.skill_levels?.cloze || '—',
+      user.role || 'siswa',
+      user.is_debug_enabled ? 'Aktif' : 'Nonaktif',
+      new Date(user.created_at).toLocaleDateString('id-ID')
+    ]);
+    
+    exportToPDF('SCHOLARA - LAPORAN DIREKTORI PENGGUNA', columns, rows, `Laporan_Pengguna_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleRoleChange = (userId, newRole) => {
@@ -108,6 +153,39 @@ const Users = () => {
     });
   };
 
+  const handleDeleteUser = (userId, name) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Pengguna',
+      message: `Apakah Anda yakin ingin menghapus pengguna "${name || 'Anonymous'}"? Semua riwayat ujian dan profilnya akan dihapus permanen.`,
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          // Delete exam results first to prevent foreign key errors
+          await db.deleteExamResults(userId);
+          
+          // Delete profile
+          const { error } = await db.deleteProfile(userId);
+          if (error) throw error;
+
+          // Update local state
+          setUsers(users.filter((u) => u.id !== userId));
+
+          // Log activity
+          await db.createAuditLog({
+            action: 'DELETE_USER',
+            target_id: userId,
+            description: `Menghapus user/siswa: ${name || 'Anonymous'} (ID: ${userId})`,
+          });
+        } catch (error) {
+          console.error('Error deleting user:', error);
+          alert('Gagal menghapus pengguna: ' + error.message);
+        }
+      },
+    });
+  };
+
   const filteredUsers = users.filter((user) => {
     const matchesSearch = user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || user.school?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
@@ -152,6 +230,12 @@ const Users = () => {
               <option value="siswa">Siswa</option>
               <option value="admin">Admin</option>
             </select>
+
+            <ExportDropdown
+              onPrint={() => window.print()}
+              onExportExcel={handleExportExcel}
+              onExportPDF={handleExportPDF}
+            />
           </div>
         </div>
 
@@ -171,6 +255,8 @@ const Users = () => {
                 <tr className="bg-[#EDE4CC] border-b border-[#C8B99A]">
                   <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Nama Lengkap</th>
                   <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Sekolah</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Level CEFR</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Detail Skill</th>
                   <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Peran</th>
                   <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Mode Debug</th>
                   <th className="px-6 py-3.5 text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">Terdaftar Pada</th>
@@ -180,7 +266,7 @@ const Users = () => {
               <tbody className="divide-y divide-[rgba(200,185,154,0.4)]">
                 {loading ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-16 text-center text-lg italic text-[#6B5A42]" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
+                    <td colSpan="8" className="px-6 py-16 text-center text-lg italic text-[#6B5A42]" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
                       Memuat direktori pengguna...
                     </td>
                   </tr>
@@ -194,6 +280,17 @@ const Users = () => {
                         <div className="text-[10px] text-[#A8946C] font-mono mt-0.5 tracking-wider">ID: {user.id.substring(0, 8)}...</div>
                       </td>
                       <td className="px-6 py-4 text-sm text-[#2C1F0E] font-medium">{user.school || '—'}</td>
+                      <td className="px-6 py-4">
+                        <span className="font-bold text-sm text-[#0A2463]">{user.cefr_level || '—'}</span>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-mono text-[#6B5A42]">
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 w-max">
+                          <div>Grammar: <span className="font-bold text-[#0A2463]">{user.skill_levels?.grammar || '—'}</span></div>
+                          <div>Vocab: <span className="font-bold text-[#0A2463]">{user.skill_levels?.vocab || '—'}</span></div>
+                          <div>Reading: <span className="font-bold text-[#0A2463]">{user.skill_levels?.reading || '—'}</span></div>
+                          <div>Cloze: <span className="font-bold text-[#0A2463]">{user.skill_levels?.cloze || '—'}</span></div>
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <span
                           className="px-2.5 py-1 rounded-sm text-[9px] font-black uppercase tracking-widest border"
@@ -221,21 +318,30 @@ const Users = () => {
                       </td>
                       <td className="px-6 py-4 text-xs font-mono text-[#6B5A42]">{new Date(user.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       <td className="px-6 py-4 text-right">
-                        {user.role === 'admin' ? (
-                          <button onClick={() => handleRoleChange(user.id, 'siswa')} className="text-[11px] font-black text-[#BF0A30] hover:text-[#8B0020] transition-colors tracking-wider">
-                            JADIKAN SISWA
+                        <div className="flex items-center justify-end gap-3">
+                          {user.role === 'admin' ? (
+                            <button onClick={() => handleRoleChange(user.id, 'siswa')} className="text-[11px] font-black text-[#BF0A30] hover:text-[#8B0020] transition-colors tracking-wider">
+                              JADIKAN SISWA
+                            </button>
+                          ) : (
+                            <button onClick={() => handleRoleChange(user.id, 'admin')} className="text-[11px] font-black text-[#1A4FAD] hover:text-[#0A2463] transition-colors tracking-wider">
+                              JADIKAN ADMIN
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteUser(user.id, user.full_name)}
+                            className="text-[11px] font-black text-[#BF0A30] hover:text-[#8B0020] transition-colors tracking-wider flex items-center gap-1"
+                            title="Hapus Pengguna"
+                          >
+                            <span>🗑️</span> HAPUS
                           </button>
-                        ) : (
-                          <button onClick={() => handleRoleChange(user.id, 'admin')} className="text-[11px] font-black text-[#1A4FAD] hover:text-[#0A2463] transition-colors tracking-wider">
-                            JADIKAN ADMIN
-                          </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="5" className="px-6 py-16 text-center text-sm italic text-[#6B5A42]" style={{ fontFamily: "'IM Fell English',serif" }}>
+                    <td colSpan="8" className="px-6 py-16 text-center text-sm italic text-[#6B5A42]" style={{ fontFamily: "'IM Fell English',serif" }}>
                       Pencarian pengguna tidak ditemukan.
                     </td>
                   </tr>
@@ -258,7 +364,13 @@ const Users = () => {
                       <div className="font-bold text-lg text-[#0A2463]" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
                         {user.full_name || 'Anonymous'}
                       </div>
-                      <div className="text-sm text-[#2C1F0E] font-medium leading-tight">{user.school || '—'}</div>
+                      <div className="text-sm text-[#2C1F0E] font-medium leading-tight mb-2">{user.school || '—'}</div>
+                      <div className="flex flex-col gap-0.5 text-xs text-[#2C1F0E] border-t border-[rgba(200,185,154,0.3)] pt-1.5 mt-1.5">
+                        <div><span className="font-semibold text-[#6B5A42]">Level CEFR:</span> <span className="font-bold text-[#0A2463]">{user.cefr_level || '—'}</span></div>
+                        <div className="text-[10px] text-[#6B5A42] font-mono leading-relaxed mt-0.5">
+                          G: {user.skill_levels?.grammar || '—'} | V: {user.skill_levels?.vocab || '—'} | R: {user.skill_levels?.reading || '—'} | C: {user.skill_levels?.cloze || '—'}
+                        </div>
+                      </div>
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
                       <span
@@ -286,15 +398,20 @@ const Users = () => {
                   </div>
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-[10px] font-mono text-[#6B5A42]">{new Date(user.created_at).toLocaleDateString('id-ID')}</span>
-                    {user.role === 'admin' ? (
-                      <button onClick={() => handleRoleChange(user.id, 'siswa')} className="text-[11px] font-black text-[#BF0A30] px-3 py-1.5 border border-[#BF0A30]/20 rounded-sm">
-                        Ubah
+                    <div className="flex items-center gap-2">
+                      {user.role === 'admin' ? (
+                        <button onClick={() => handleRoleChange(user.id, 'siswa')} className="text-[11px] font-black text-[#BF0A30] px-3 py-1.5 border border-[#BF0A30]/20 rounded-sm">
+                          Siswa
+                        </button>
+                      ) : (
+                        <button onClick={() => handleRoleChange(user.id, 'admin')} className="text-[11px] font-black text-[#1A4FAD] px-3 py-1.5 border border-[#1A4FAD]/20 rounded-sm">
+                          Admin
+                        </button>
+                      )}
+                      <button onClick={() => handleDeleteUser(user.id, user.full_name)} className="text-[11px] font-black text-[#BF0A30] px-3 py-1.5 border border-[#BF0A30]/20 rounded-sm flex items-center gap-1">
+                        🗑️ Hapus
                       </button>
-                    ) : (
-                      <button onClick={() => handleRoleChange(user.id, 'admin')} className="text-[11px] font-black text-[#1A4FAD] px-3 py-1.5 border border-[#1A4FAD]/20 rounded-sm">
-                        Ubah
-                      </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               ))

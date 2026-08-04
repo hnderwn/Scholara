@@ -45,3 +45,77 @@
     @apply bg-parchment-dark border border-parchment-border text-ink rounded-sm px-4 py-2.5 outline-none transition-all duration-200 focus:bg-parchment-light focus:border-navy focus:ring-4 focus:ring-navy/5;
   }
 }
+
+/* ══ Media Print Styles (Scholara Print System) ══ */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-family: serif !important;
+  }
+
+  /* Sembunyikan sidebar, navigasi, dan tombol aksi */
+  aside,
+  nav,
+  button,
+  select,
+  input,
+  .no-print,
+  .print-hide,
+  th:last-child, /* Sembunyikan kolom Aksi di tabel */
+  td:last-child {
+    display: none !important;
+  }
+
+  /* Reset layout utama agar memenuhi halaman */
+  main {
+    margin-left: 0 !important;
+    padding-top: 0 !important;
+    padding: 0 !important;
+    background-color: #ffffff !important;
+    width: 100% !important;
+  }
+
+  /* Optimasi box dan kartu untuk cetak */
+  .rounded-sm,
+  .shadow-xl,
+  .shadow-md,
+  div[style*="boxShadow"] {
+    box-shadow: none !important;
+    border: none !important;
+    background-color: #ffffff !important;
+  }
+
+  /* Desain tabel bersih untuk cetak */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 20px !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+  }
+
+  th {
+    background-color: #f3f4f6 !important;
+    color: #000000 !important;
+    border: 1px solid #9ca3af !important;
+    font-weight: bold !important;
+    font-size: 11px !important;
+    padding: 8px !important;
+  }
+
+  td {
+    border: 1px solid #d1d5db !important;
+    color: #000000 !important;
+    font-size: 11px !important;
+    padding: 8px !important;
+    background-color: transparent !important;
+  }
+
+  /* Warna tulisan judul */
+  h1, h2, h3 {
+    color: #000000 !important;
+  }
+}

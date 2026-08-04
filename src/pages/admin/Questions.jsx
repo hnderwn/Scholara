@@ -3,6 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { db } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import { exportToExcel, exportToPDF, exportToCSV } from '../../utils/export';
+import ExportDropdown from '../../components/admin/ExportDropdown';
 
 // ── Shared helpers ──
 const GoldRule = ({ opacity = 1 }) => <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,#C8B99A 30%,#C8B99A 70%,transparent)', opacity }} />;
@@ -199,6 +201,52 @@ const Questions = () => {
     return matchesSearch && matchesCategory && matchesDifficulty;
   });
 
+  const handleExportExcel = () => {
+    const dataToExport = filteredQuestions.map(q => ({
+      'Teks Soal': q.question_text || '',
+      'Kategori': q.category || '',
+      'Sub-Kategori': q.sub_category || '',
+      'Level': q.difficulty || 1,
+      'Bobot': q.weight || 1,
+      'Kunci': q.correct_answer || '',
+      'Opsi A': q.options?.A || '',
+      'Opsi B': q.options?.B || '',
+      'Opsi C': q.options?.C || '',
+      'Opsi D': q.options?.D || '',
+      'Opsi E': q.options?.E || '',
+    }));
+    exportToExcel(dataToExport, `Daftar_Soal_${new Date().toISOString().split('T')[0]}.xlsx`, 'Daftar Soal');
+  };
+
+  const handleExportCSV = () => {
+    const dataToExport = filteredQuestions.map(q => ({
+      'Teks Soal': q.question_text || '',
+      'Kategori': q.category || '',
+      'Sub-Kategori': q.sub_category || '',
+      'Level': q.difficulty || 1,
+      'Bobot': q.weight || 1,
+      'Kunci': q.correct_answer || '',
+      'Opsi A': q.options?.A || '',
+      'Opsi B': q.options?.B || '',
+      'Opsi C': q.options?.C || '',
+      'Opsi D': q.options?.D || '',
+      'Opsi E': q.options?.E || '',
+    }));
+    exportToCSV(dataToExport, `Daftar_Soal_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleExportPDF = () => {
+    const columns = ['Teks Soal', 'Kategori', 'Sub-Kategori', 'Level', 'Kunci'];
+    const rows = filteredQuestions.map(q => [
+      q.question_text ? (q.question_text.length > 50 ? q.question_text.substring(0, 50) + '...' : q.question_text) : '',
+      q.category || '',
+      q.sub_category || '',
+      q.difficulty || 1,
+      q.correct_answer || '',
+    ]);
+    exportToPDF('SCHOLARA - LAPORAN DIREKTORI SOAL', columns, rows, `Laporan_Soal_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   const totalPages = Math.ceil(filteredQuestions.length / itemsPerPage);
   const paginatedQuestions = filteredQuestions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -306,6 +354,12 @@ const Questions = () => {
                 <option value="2">Level 2 (B1/B2)</option>
                 <option value="3">Level 3 (C1/C2)</option>
               </select>
+              <ExportDropdown
+                onPrint={() => window.print()}
+                onExportExcel={handleExportExcel}
+                onExportCSV={handleExportCSV}
+                onExportPDF={handleExportPDF}
+              />
             </div>
           </div>
 

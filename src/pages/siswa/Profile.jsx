@@ -45,6 +45,8 @@ const Profile = () => {
             totalExams,
             averageScore: Math.round(totalScore / totalExams)
           });
+        } else {
+          setStats({ totalExams: 0, averageScore: 0 });
         }
       } catch (error) {
         console.error('Error loading profile stats:', error);

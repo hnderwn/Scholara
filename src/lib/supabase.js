@@ -40,6 +40,8 @@ export const db = {
 
   updateProfile: (userId, updates) => supabase.from('profiles').update(updates).eq('id', userId),
 
+  deleteProfile: (userId) => supabase.from('profiles').delete().eq('id', userId),
+
   // Questions
   getQuestions: (category = null) => {
     let query = supabase.from('questions').select('*');
@@ -70,7 +72,7 @@ export const db = {
   deleteExamResults: (userId) => supabase.from('exam_results').delete().eq('user_id', userId),
 
   getExamResults: (userId = null) => {
-    let query = supabase.from('exam_results').select(`*, profiles(full_name, school)`).order('created_at', { ascending: false });
+    let query = supabase.from('exam_results').select(`*, profiles(full_name, school, cefr_level)`).order('created_at', { ascending: false });
 
     if (userId) {
       query = query.eq('user_id', userId);

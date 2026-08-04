@@ -10,6 +10,8 @@ import QuestionCard from '../../components/Exam/QuestionCard';
 import Timer from '../../components/ui/Timer';
 import Button from '../../components/ui/Button';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import DevDebugPanel from '../../components/Exam/DevDebugPanel';
+import QuestionNavigationSidebar from '../../components/Exam/QuestionNavigationSidebar';
 
 // ── Reusable dividers (Sesuai dengan tema) ──
 const RedRule = ({ opacity = 1 }) => <div style={{ height: 2, background: 'linear-gradient(90deg,transparent,#BF0A30 25%,#BF0A30 75%,transparent)', opacity }} />;
@@ -26,6 +28,7 @@ const Exam = () => {
   const [submitting, setSubmitting] = useState(false);
   const [hasDiagnostic, setHasDiagnostic] = useState(false);
   const [verifyingLock, setVerifyingLock] = useState(true);
+  const [isIndexExpanded, setIsIndexExpanded] = useState(window.innerWidth > 768);
 
   // 1. Verifikasi status pengerjaan Ujian Diagnostik dari database secara asinkron
   useEffect(() => {
@@ -150,11 +153,10 @@ const Exam = () => {
     try {
       setLoading(true);
       const packageId = searchParams.get('paket');
-      // Kita TIDAK memanggil clearExam() lagi secara brutal agar fungsi REJOIN dari context aktif!
-
 
       let data, error;
 
+      // Ambil soal dari database
       if (navigator.onLine) {
         const response = await db.getQuestions();
         data = response.data;
@@ -172,7 +174,26 @@ const Exam = () => {
       let examQuestions = data || [];
 
       if (packageId === 'kickstart_diagnostic') {
-        examQuestions = shuffleArray(examQuestions).slice(0, 50);
+        // Ujian Diagnostik: Komposisi seimbang agar adil untuk seluruh siswa (15 L1, 20 L2, 15 L3)
+        // Hal ini untuk menghindari ketimpangan statistik di mana user tertentu mendapatkan terlalu banyak soal sulit
+        const l1Pool = shuffleArray(examQuestions.filter((q) => q.difficulty === 1));
+        const l2Pool = shuffleArray(examQuestions.filter((q) => q.difficulty === 2));
+        const l3Pool = shuffleArray(examQuestions.filter((q) => q.difficulty === 3));
+
+        const selectedL1 = l1Pool.slice(0, 15);
+        const selectedL2 = l2Pool.slice(0, 20);
+        const selectedL3 = l3Pool.slice(0, 15);
+
+        let selectedQuestions = [...selectedL1, ...selectedL2, ...selectedL3];
+
+        // Jika jumlah soal di bank soal tidak mencukupi untuk memenuhi target 50 soal, isi kekurangannya dari sisa bank soal
+        if (selectedQuestions.length < 50) {
+          const selectedIds = new Set(selectedQuestions.map(q => q.id));
+          const unused = shuffleArray(examQuestions.filter(q => !selectedIds.has(q.id)));
+          selectedQuestions = [...selectedQuestions, ...unused.slice(0, 50 - selectedQuestions.length)];
+        }
+
+        examQuestions = shuffleArray(selectedQuestions);
       } else if (['grammar_master', 'vocab_power', 'reading_pro', 'cloze_challenge', 'practice'].includes(packageId)) {
         let targetCategory = '';
         let totalCount = 20;
@@ -191,15 +212,19 @@ const Exam = () => {
           const l2Pool = shuffleArray(filtered.filter(q => q.difficulty === 2));
           const l3Pool = shuffleArray(filtered.filter(q => q.difficulty === 3));
 
+          // Menentukan proporsi pembagian soal berdasarkan tingkat kemahiran CEFR siswa secara adaptif:
           let l1Count = 0, l2Count = 0, l3Count = 0;
           if (cefr === 'A1/A2' || cefr === 'A1' || cefr === 'A2') {
+            // Tingkat Dasar (A1/A2): 80% soal mudah (Level 1), 20% soal sedang (Level 2)
             l1Count = Math.round(totalCount * 0.8);
             l2Count = Math.round(totalCount * 0.2);
           } else if (cefr === 'B1/B2' || cefr === 'B1' || cefr === 'B2') {
+            // Tingkat Menengah (B1/B2): 20% soal mudah (Level 1), 60% soal sedang (Level 2), 20% soal sulit (Level 3)
             l1Count = Math.round(totalCount * 0.2);
             l2Count = Math.round(totalCount * 0.6);
             l3Count = Math.round(totalCount * 0.2);
           } else {
+            // Tingkat Mahir (C1/C2): 30% soal sedang (Level 2), 70% soal sulit (Level 3)
             l2Count = Math.round(totalCount * 0.3);
             l3Count = Math.round(totalCount * 0.7);
           }
@@ -607,36 +632,10 @@ const Exam = () => {
               </div>
 
               <div className="flex items-center space-x-3">
-                {/* Dev Mode Debug Helper */}
-                {(import.meta.env.DEV || profile?.is_debug_enabled || profile?.role === 'admin') && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-red-50/10 border border-red-200/30 rounded-sm">
-                    <span className="text-[10px] font-bold text-[#C9A84C] font-mono">DEBUG:</span>
-                    <button
-                      onClick={() => handleDebugAutoFill('correct')}
-                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-mono text-[9px] font-bold rounded-sm transition-colors"
-                    >
-                      Benar
-                    </button>
-                    <button
-                      onClick={() => handleDebugAutoFill('incorrect')}
-                      className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-mono text-[9px] font-bold rounded-sm transition-colors"
-                    >
-                      Salah
-                    </button>
-                    <button
-                      onClick={() => handleDebugAutoFill('random')}
-                      className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-mono text-[9px] font-bold rounded-sm transition-colors"
-                    >
-                      Acak
-                    </button>
-                    <button
-                      onClick={() => handleDebugAutoFill('custom')}
-                      className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white font-mono text-[9px] font-bold rounded-sm transition-colors"
-                    >
-                      Set Skor
-                    </button>
-                  </div>
-                )}
+                <DevDebugPanel
+                  profile={profile}
+                  handleDebugAutoFill={handleDebugAutoFill}
+                />
 
                 {/* Hierarki UX: Tombol Batal dibuat lebih "subtle" */}
                 <button onClick={() => setShowConfirmCancel(true)} className="text-xs font-bold uppercase tracking-wider transition-colors hover:underline" style={{ color: '#6B5A42' }}>
@@ -712,47 +711,15 @@ const Exam = () => {
 
           {/* ══ NAVIGASI SOAL (Diurutkan kedua di Mobile, Sticky di Desktop) ══ */}
           <div className="order-2 lg:col-span-1">
-            <div className="rounded-sm sticky top-28" style={{ backgroundColor: '#FAF6EC', border: '1px solid #C8B99A', boxShadow: '0 4px 16px rgba(10,36,99,0.05)' }}>
-              <RedRule opacity={0.6} />
-              <div className="p-4 md:p-5">
-                <h3 className="text-sm font-bold mb-3 uppercase tracking-widest" style={{ color: '#0A2463' }}>
-                  Indeks Soal
-                </h3>
-                <GoldRule opacity={0.6} />
-
-                {/* Solusi Mobile UX: max-h-60 overflow-y-auto */}
-                <div className="mt-4 grid grid-cols-5 gap-2 max-h-60 lg:max-h-[calc(100vh-16rem)] overflow-y-auto pr-1">
-                  {Array.from({ length: totalQuestions }, (_, i) => {
-                    const questionId = questions[i]?.id;
-                    const isAnswered = answers[questionId] !== undefined;
-                    const isCurrent = i === currentQuestionIndex;
-
-                    // Classic Button Styles Logic
-                    let btnStyle = { border: '1px solid #C8B99A', color: '#6B5A42', backgroundColor: 'transparent' };
-                    if (isCurrent) {
-                      btnStyle = { border: '1px solid #0A2463', color: '#fff', backgroundColor: '#0A2463' }; // Navy for active
-                    } else if (isAnswered) {
-                      btnStyle = { border: '1px solid #1A4FAD', color: '#1A4FAD', backgroundColor: '#EDE4CC' }; // Highlighted for answered
-                    }
-
-                    return (
-                      <button key={i} onClick={() => handleQuestionClick(i)} className="w-full aspect-square rounded-sm text-xs font-bold font-mono transition-all hover:opacity-80 flex items-center justify-center" style={btnStyle}>
-                        {i + 1}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-5 pt-4" style={{ borderTop: '1px solid rgba(200,185,154,0.4)' }}>
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span style={{ color: '#6B5A42' }}>Terjawab:</span>
-                    <span className="font-bold text-sm" style={{ color: '#0A2463' }}>
-                      {Object.keys(answers).length} / {totalQuestions}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <QuestionNavigationSidebar
+              totalQuestions={totalQuestions}
+              questions={questions}
+              answers={answers}
+              currentQuestionIndex={currentQuestionIndex}
+              handleQuestionClick={handleQuestionClick}
+              isIndexExpanded={isIndexExpanded}
+              setIsIndexExpanded={setIsIndexExpanded}
+            />
           </div>
         </div>
       </div>

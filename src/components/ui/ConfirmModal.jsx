@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import Button from './Button';
 
 const RedRule = ({ opacity = 1 }) => (
@@ -15,6 +15,14 @@ const ConfirmModal = ({
   cancelText = 'Batal',
   confirmVariant = 'primary',
 }) => {
+  const modalRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && modalRef.current) {
+      modalRef.current.focus();
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -23,14 +31,16 @@ const ConfirmModal = ({
       style={{ background: 'rgba(10,36,99,0.35)', backdropFilter: 'blur(2px)' }}
     >
       <div
-        className="w-full max-w-md rounded-sm overflow-hidden shadow-2xl transition-all scale-100"
+        ref={modalRef}
+        tabIndex={-1}
+        className="w-full max-w-md rounded-sm overflow-hidden shadow-2xl transition-all scale-100 flex flex-col max-h-[95vh] outline-none"
         style={{ background: '#FAF6EC', border: '1px solid #C9A84C' }}
       >
         {/* Top Accent line */}
         <RedRule />
 
         {/* Header */}
-        <div className="px-6 py-5 border-b border-[#C8B99A]/40">
+        <div className="px-6 py-5 border-b border-[#C8B99A]/40 flex-shrink-0">
           <h3
             className="font-bold text-xl leading-tight text-[#0A2463]"
             style={{ fontFamily: "'Cormorant Garamond', serif" }}
@@ -40,7 +50,7 @@ const ConfirmModal = ({
         </div>
 
         {/* Message Body */}
-        <div className="px-6 py-5">
+        <div className="px-6 py-5 overflow-y-auto max-h-[60vh] flex-1">
           <p
             className="text-sm text-[#2C1F0E] font-medium leading-relaxed"
             style={{ fontFamily: "'DM Sans', sans-serif" }}
@@ -51,7 +61,7 @@ const ConfirmModal = ({
 
         {/* Footer actions */}
         <div
-          className="px-6 py-4 flex gap-3 border-t border-[#C8B99A]/40"
+          className="px-6 py-4 flex gap-3 border-t border-[#C8B99A]/40 flex-shrink-0"
           style={{ background: '#EDE4CC' }}
         >
           <Button

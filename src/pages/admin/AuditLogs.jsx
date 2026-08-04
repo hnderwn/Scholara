@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
+import { exportToExcel, exportToPDF, exportToCSV } from '../../utils/export';
+import ExportDropdown from '../../components/admin/ExportDropdown';
 
 const AuditLogs = () => {
   // ── Semua state & logika asli tidak diubah ──
@@ -24,6 +26,40 @@ const AuditLogs = () => {
     }
   };
 
+  const handleExportExcel = () => {
+    const dataToExport = logs.map(log => ({
+      'Waktu': new Date(log.created_at).toLocaleString('id-ID'),
+      'Administrator': log.profiles?.full_name || 'System',
+      'Aksi': log.action,
+      'Deskripsi': log.description,
+      'Target ID': log.target_id || '—',
+    }));
+    exportToExcel(dataToExport, `Audit_Logs_${new Date().toISOString().split('T')[0]}.xlsx`, 'Audit Logs');
+  };
+
+  const handleExportCSV = () => {
+    const dataToExport = logs.map(log => ({
+      'Waktu': new Date(log.created_at).toLocaleString('id-ID'),
+      'Administrator': log.profiles?.full_name || 'System',
+      'Aksi': log.action,
+      'Deskripsi': log.description,
+      'Target ID': log.target_id || '—',
+    }));
+    exportToCSV(dataToExport, `Audit_Logs_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleExportPDF = () => {
+    const columns = ['Waktu', 'Administrator', 'Aksi', 'Deskripsi', 'Target ID'];
+    const rows = logs.map(log => [
+      new Date(log.created_at).toLocaleString('id-ID'),
+      log.profiles?.full_name || 'System',
+      log.action,
+      log.description ? (log.description.length > 50 ? log.description.substring(0, 50) + '...' : log.description) : '',
+      log.target_id || '—',
+    ]);
+    exportToPDF('SCHOLARA - AUDIT SYSTEM LOGS', columns, rows, `Laporan_Audit_Logs_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   // ── getActionColor diganti ke Collegiate palette, logika kondisi sama persis ──
   const getActionColor = (action) => {
     if (action.startsWith('CREATE')) return { bg: '#F0FDF4', color: '#16A34A', border: '#BBF7D0' };
@@ -36,12 +72,22 @@ const AuditLogs = () => {
     <div className="min-h-screen p-4 md:p-6 lg:p-8" style={{ backgroundColor: '#F2ECD8', fontFamily: "'DM Sans',sans-serif" }}>
       {/* ── Page header ── */}
       <div className="max-w-7xl mx-auto mb-8">
-        <h1 className="font-bold text-3xl leading-none" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
-          Audit Logs
-        </h1>
-        <p className="text-sm italic mt-1" style={{ fontFamily: "'IM Fell English',serif", color: '#6B5A42' }}>
-          Lacak sejarah perubahan sistem oleh administrator.
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <h1 className="font-bold text-3xl leading-none" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
+              Audit Logs
+            </h1>
+            <p className="text-sm italic mt-1" style={{ fontFamily: "'IM Fell English',serif", color: '#6B5A42' }}>
+              Lacak sejarah perubahan sistem oleh administrator.
+            </p>
+          </div>
+          <ExportDropdown
+            onPrint={() => window.print()}
+            onExportExcel={handleExportExcel}
+            onExportCSV={handleExportCSV}
+            onExportPDF={handleExportPDF}
+          />
+        </div>
         <div className="mt-4" style={{ height: 1, background: 'linear-gradient(90deg,transparent,#C8B99A 30%,#C8B99A 70%,transparent)' }} />
       </div>
 

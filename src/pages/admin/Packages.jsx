@@ -274,7 +274,7 @@ const Packages = () => {
                     {pkg.name}
                   </h3>
                   <p className="text-xs font-bold mb-3" style={{ color: '#C9A84C' }}>
-                    {pkg.unique_name || 'Generic Package'}
+                    Acuan CEFR: {pkg.unique_name || 'Diagnostic'}
                   </p>
 
                   {/* Description */}
@@ -354,11 +354,30 @@ const Packages = () => {
                   />
                 </div>
 
-                {/* Label unik + Kategori */}
+                {/* Label unik (CEFR) + Kategori */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <FieldLabel>Label Unik</FieldLabel>
-                    <input type="text" placeholder="e.g. Level B1-B2" style={fieldStyle} onFocus={focusField} onBlur={blurField} value={formData.unique_name} onChange={(e) => setFormData({ ...formData, unique_name: e.target.value })} />
+                    <FieldLabel>Tingkat Kesulitan CEFR</FieldLabel>
+                    <select
+                      style={fieldStyle}
+                      onFocus={focusField}
+                      onBlur={blurField}
+                      value={formData.unique_name}
+                      onChange={(e) => setFormData({ ...formData, unique_name: e.target.value })}
+                      required
+                    >
+                      <option value="">-- Pilih Level CEFR --</option>
+                      <option value="A1/A2">A1/A2</option>
+                      <option value="B1/B2">B1/B2</option>
+                      <option value="C1/C2">C1/C2</option>
+                      <option value="A1">A1</option>
+                      <option value="A2">A2</option>
+                      <option value="B1">B1</option>
+                      <option value="B2">B2</option>
+                      <option value="C1">C1</option>
+                      <option value="C2">C2</option>
+                      <option value="Diagnostic">Diagnostic</option>
+                    </select>
                   </div>
                   <div>
                     <FieldLabel>Kategori</FieldLabel>

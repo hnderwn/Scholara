@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { db } from '../../lib/supabase';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import { exportToExcel, exportToPDF, exportToCSV } from '../../utils/export';
+import ExportDropdown from '../../components/admin/ExportDropdown';
 
 const levelBadgeStyle = (level = '') => {
   const l = level.toUpperCase();
@@ -134,6 +136,46 @@ const AdminLearning = () => {
     (m) => m.term.toLowerCase().includes(searchTerm.toLowerCase()) || m.category.toLowerCase().includes(searchTerm.toLowerCase()) || (m.sub_category && m.sub_category.toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
+  const handleExportExcel = () => {
+    const dataToExport = filteredMaterials.map(m => ({
+      'Istilah': m.term || '',
+      'Kategori': m.category || '',
+      'Sub Kategori': m.sub_category || '',
+      'Level': m.level || 'B1',
+      'Definisi (EN)': m.definition || '',
+      'Definisi (ID)': m.definition_bahasa || '',
+      'Contoh Kalimat (EN)': m.example_sentence || '',
+      'Contoh Kalimat (ID)': m.example_sentence_bahasa || '',
+    }));
+    exportToExcel(dataToExport, `Materi_Belajar_${new Date().toISOString().split('T')[0]}.xlsx`, 'Materi Belajar');
+  };
+
+  const handleExportCSV = () => {
+    const dataToExport = filteredMaterials.map(m => ({
+      'Istilah': m.term || '',
+      'Kategori': m.category || '',
+      'Sub Kategori': m.sub_category || '',
+      'Level': m.level || 'B1',
+      'Definisi (EN)': m.definition || '',
+      'Definisi (ID)': m.definition_bahasa || '',
+      'Contoh Kalimat (EN)': m.example_sentence || '',
+      'Contoh Kalimat (ID)': m.example_sentence_bahasa || '',
+    }));
+    exportToCSV(dataToExport, `Materi_Belajar_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleExportPDF = () => {
+    const columns = ['Istilah', 'Kategori', 'Sub Kategori', 'Level', 'Definisi (ID)'];
+    const rows = filteredMaterials.map(m => [
+      m.term || '',
+      m.category || '',
+      m.sub_category || '',
+      m.level || '',
+      m.definition_bahasa ? (m.definition_bahasa.length > 50 ? m.definition_bahasa.substring(0, 50) + '...' : m.definition_bahasa) : '',
+    ]);
+    exportToPDF('SCHOLARA - LAPORAN MATERI BELAJAR', columns, rows, `Laporan_Materi_Belajar_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   const totalPages = Math.ceil(filteredMaterials.length / itemsPerPage);
   const paginatedMaterials = filteredMaterials.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -197,6 +239,12 @@ const AdminLearning = () => {
             >
               + Tambah Materi
             </button>
+            <ExportDropdown
+              onPrint={() => window.print()}
+              onExportExcel={handleExportExcel}
+              onExportCSV={handleExportCSV}
+              onExportPDF={handleExportPDF}
+            />
           </div>
         </div>
         <div className="mt-4">

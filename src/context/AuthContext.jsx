@@ -222,6 +222,10 @@ export const AuthProvider = ({ children }) => {
           if (manualProfileError) {
             console.error('Manual profile creation fallback failed:', manualProfileError);
           }
+        } else if (!checkProfile.school && school) {
+          // Jika profil dibuat oleh database trigger tetapi nama sekolah belum tercatat, perbarui langsung
+          console.log('Profile created by trigger but school is missing. Updating school...');
+          await db.updateProfile(authData.user.id, { school: school });
         }
 
         const userProfile = await fetchProfile(authData.user.id);

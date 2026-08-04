@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../lib/supabase';
+import { exportToExcel, exportToPDF } from '../../utils/export';
 // Import komponen UI tetap dipertahankan agar tidak mengubah struktur dependensi
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-
-// ── Reusable dividers (Sesuai dengan tema) ──
-const RedRule = ({ opacity = 1 }) => <div style={{ height: 2, background: 'linear-gradient(90deg,transparent,#BF0A30 25%,#BF0A30 75%,transparent)', opacity }} />;
-const GoldRule = ({ opacity = 1 }) => <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,#C8B99A 30%,#C8B99A 70%,transparent)', opacity }} />;
+import { RedRule, GoldRule } from '../../components/ui/Rules';
+import ExportDropdown from '../../components/admin/ExportDropdown';
+import ResultDetailModal from '../../components/admin/ResultDetailModal';
 
 const ResultsCenter = () => {
   const [results, setResults] = useState([]);
@@ -30,6 +30,49 @@ const ResultsCenter = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExportExcel = () => {
+    const dataToExport = filteredResults.map(r => ({
+      'Nama Siswa': r.profiles?.full_name || 'Anonymous',
+      'Sekolah': r.profiles?.school || '—',
+      'Tipe Ujian': r.exam_type || 'Ujian',
+      'Skor Total': r.score_total,
+      'Grammar %': r.category_scores?.grammar?.score || 0,
+      'Vocab %': r.category_scores?.vocab?.score || 0,
+      'Reading %': r.category_scores?.reading?.score || 0,
+      'Cloze %': r.category_scores?.cloze?.score || 0,
+      'Tanggal': new Date(r.created_at).toLocaleString('id-ID'),
+    }));
+    exportToExcel(dataToExport, `Hasil_Ujian_${new Date().toISOString().split('T')[0]}.xlsx`, 'Hasil Ujian');
+  };
+
+  const handleExportPDF = () => {
+    const columns = [
+      'Nama Siswa',
+      'Sekolah',
+      'Tipe Ujian',
+      'Skor Total',
+      'Grammar',
+      'Vocab',
+      'Reading',
+      'Cloze',
+      'Tanggal'
+    ];
+    
+    const rows = filteredResults.map(r => [
+      r.profiles?.full_name || 'Anonymous',
+      r.profiles?.school || '—',
+      r.exam_type || 'Ujian',
+      `${r.score_total}/100`,
+      `${r.category_scores?.grammar?.score || 0}%`,
+      `${r.category_scores?.vocab?.score || 0}%`,
+      `${r.category_scores?.reading?.score || 0}%`,
+      `${r.category_scores?.cloze?.score || 0}%`,
+      new Date(r.created_at).toLocaleDateString('id-ID')
+    ]);
+    
+    exportToPDF('SCHOLARA - LAPORAN HASIL UJIAN SISWA', columns, rows, `Laporan_Hasil_Ujian_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleSort = (key) => {
@@ -72,14 +115,22 @@ const ResultsCenter = () => {
             </p>
           </div>
 
-          <div className="flex items-center bg-[#EDE4CC] border border-[#C8B99A] rounded-sm px-3.5 py-2.5 transition-all focus-within:border-[#1A4FAD] focus-within:shadow-[0_0_0_3px_rgba(26,79,173,0.12)]">
-            <span className="text-[#A8946C] mr-2 text-sm">🔍</span>
-            <input
-              type="text"
-              placeholder="Cari nama atau sekolah..."
-              className="outline-none text-[13px] text-[#2C1F0E] w-full md:w-72 bg-transparent font-['DM_Sans'] placeholder-[#A8946C]"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="w-full sm:w-auto flex items-center bg-[#EDE4CC] border border-[#C8B99A] rounded-sm px-3.5 py-2.5 transition-all focus-within:border-[#1A4FAD] focus-within:shadow-[0_0_0_3px_rgba(26,79,173,0.12)]">
+              <span className="text-[#A8946C] mr-2 text-sm">🔍</span>
+              <input
+                type="text"
+                placeholder="Cari nama atau sekolah..."
+                className="outline-none text-[13px] text-[#2C1F0E] w-full sm:w-64 bg-transparent font-['DM_Sans'] placeholder-[#A8946C]"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <ExportDropdown
+              onPrint={() => window.print()}
+              onExportExcel={handleExportExcel}
+              onExportPDF={handleExportPDF}
             />
           </div>
         </div>
@@ -195,73 +246,11 @@ const ResultsCenter = () => {
         </div>
 
         {/* ══════════ MODAL RINCIAN UJIAN ══════════ */}
-        {selectedDetails && (
-          <div className="fixed inset-0 bg-[#0A2463]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity">
-            <div className="max-w-2xl w-full bg-[#FAF6EC] border border-[#C8B99A] rounded-sm shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
-              {/* Aksen RedRule di puncak Modal Sesuai Permintaan */}
-              <RedRule />
-
-              <div className="p-6 md:p-8">
-                {/* Modal Header */}
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h2 className="text-3xl font-bold leading-tight text-[#0A2463]" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
-                      {selectedDetails.profiles?.full_name || 'Anonymous Student'}
-                    </h2>
-                    <p className="text-sm italic text-[#6B5A42] mt-1" style={{ fontFamily: "'IM Fell English',serif" }}>
-                      {selectedDetails.profiles?.school || 'Institusi Tidak Diketahui'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[#6B5A42] mb-1">Skor Total</p>
-                    <p className="text-4xl font-black leading-none" style={{ fontFamily: "'Cormorant Garamond',serif", color: selectedDetails.score_total >= 80 ? '#16A34A' : selectedDetails.score_total >= 60 ? '#D97706' : '#BF0A30' }}>
-                      {selectedDetails.score_total}
-                    </p>
-                  </div>
-                </div>
-
-                <GoldRule opacity={0.6} />
-
-                {/* Score Grid - Diubah menjadi gaya kartu klasik (bukan tailwind pastel color logic) */}
-                <div className="grid grid-cols-2 gap-4 mt-8 mb-8">
-                  {[
-                    { label: 'Grammar', key: 'grammar' },
-                    { label: 'Vocabulary', key: 'vocab' },
-                    { label: 'Reading', key: 'reading' },
-                    { label: 'Cloze', key: 'cloze' },
-                  ].map((cat) => (
-                    <div key={cat.label} className="p-4 rounded-sm bg-[#F2ECD8] border border-[rgba(200,185,154,0.5)] flex items-center justify-between transition-transform hover:-translate-y-1">
-                      <span className="text-[10px] font-black text-[#6B5A42] uppercase tracking-widest">{cat.label}</span>
-                      <span className="text-2xl font-black text-[#0A2463]" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
-                        {selectedDetails.category_scores?.[cat.key]?.score || 0}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Date & Exam Info */}
-                <div className="bg-[#0A2463] border border-[rgba(201,168,76,0.3)] text-white rounded-sm p-6 mb-8 relative overflow-hidden">
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,transparent,#C9A84C 25%,#C9A84C 75%,transparent)' }} />
-                  <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: 'rgba(201,168,76,0.7)' }}>
-                    ✦ Waktu Pelaksanaan Ujian
-                  </p>
-                  <p className="text-lg font-bold" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
-                    {new Date(selectedDetails.created_at).toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}
-                  </p>
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg,transparent,#C9A84C 25%,#C9A84C 75%,transparent)' }} />
-                </div>
-
-                {/* Close Action */}
-                <button
-                  onClick={() => setSelectedDetails(null)}
-                  className="w-full py-3 rounded-sm bg-[#FAF6EC] border border-[#C8B99A] text-[#6B5A42] text-sm font-bold uppercase tracking-wider transition-all hover:border-[#0A2463] hover:text-[#0A2463]"
-                >
-                  Tutup Rincian
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ResultDetailModal
+          isOpen={!!selectedDetails}
+          result={selectedDetails}
+          onClose={() => setSelectedDetails(null)}
+        />
       </div>
     </div>
   );

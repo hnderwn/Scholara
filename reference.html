@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Opsi A - 4 Hero States</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #E8E2CC; font-family: 'DM Sans', sans-serif; padding: 20px 0 60px; }
+  .toggle-wrap { max-width: 1000px; margin: 0 auto 24px; padding: 0 20px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .toggle-btn { padding: 9px 16px; border-radius: 8px; border: 2px solid #0A2463; background: #fff; color: #0A2463; font-weight: 700; font-size: 12px; cursor: pointer; }
+  .toggle-btn.active { background: #0A2463; color: #C9A84C; }
+  .view { display: none; max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+  .view.active { display: block; }
+  .label { text-align: center; font-size: 12px; color: #6B5D30; margin-bottom: 14px; }
+
+  .header-strip { background: #0A2463; border-radius: 10px 10px 0 0; padding: 10px 22px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(201,168,76,.25); }
+  .header-strip .title { color: #F2ECD8; font-size: 12px; font-weight: 700; }
+  .stat-inline { display: flex; gap: 22px; }
+  .stat-inline .item { text-align: center; }
+  .stat-inline .val { font-family: 'Cormorant Garamond', serif; font-size: 15px; font-weight: 700; color: #C9A84C; }
+  .stat-inline .lbl { font-size: 9px; color: #8A98BE; text-transform: uppercase; letter-spacing: .4px; }
+
+  .hero { background: #0A2463; padding: 26px 30px; color: #F2ECD8; position: relative; border-radius: 0 0 10px 10px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(201,168,76,.15); border: 1px solid #C9A84C; color: #C9A84C; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 6px; margin-bottom: 14px; }
+  .badge.green { background: rgba(29,158,117,.18); border-color: #1D9E75; color: #4FD8AE; }
+  .hero h1 { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+  .hero .quote { color: #C9A84C; font-style: italic; font-size: 13px; margin-bottom: 10px; }
+  .hero p { color: #C7C2A8; font-size: 13px; max-width: 480px; margin-bottom: 18px; }
+  .btn-gold { background: #C9A84C; color: #0A2463; border: none; padding: 10px 20px; font-size: 12px; font-weight: 700; border-radius: 6px; cursor: pointer; }
+
+  .skillgrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 16px; }
+  .skill-box { border: 1px solid rgba(201,168,76,.3); border-radius: 8px; padding: 12px 14px; }
+  .skill-box.rec { border-color: #C9A84C; background: rgba(201,168,76,.06); }
+  .skill-box .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; font-weight: 700; }
+  .tag-rec { background: #C9A84C; color: #0A2463; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+  .skill-box .status { font-size: 11px; color: #9AA6C4; }
+
+  .rec-box { border-left: 3px solid #C9A84C; background: rgba(201,168,76,.06); padding: 14px 16px; border-radius: 0 8px 8px 0; }
+  .rec-box .eyebrow { color: #C9A84C; font-size: 10px; font-weight: 700; letter-spacing: .5px; margin-bottom: 4px; }
+  .rec-box .name { font-family: 'Cormorant Garamond', serif; font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .rec-box .desc { font-size: 12px; color: #C7C2A8; margin-bottom: 12px; }
+
+  .diag-icon { font-size: 40px; margin-bottom: 12px; }
+  .levelup-box { border: 1px solid rgba(201,168,76,.4); background: rgba(201,168,76,.08); border-radius: 8px; padding: 16px; display: flex; justify-content: space-between; align-items: center; }
+</style>
+</head>
+<body>
+
+<div class="toggle-wrap">
+  <button class="toggle-btn active" onclick="show('diagnostic')">1. Diagnostic</button>
+  <button class="toggle-btn" onclick="show('practice')">2. Practice</button>
+  <button class="toggle-btn" onclick="show('levelup')">3. Level Up</button>
+  <button class="toggle-btn" onclick="show('mastered')">4. Mastered</button>
+</div>
+
+<!-- 1. DIAGNOSTIC -->
+<div id="diagnostic" class="view active">
+  <p class="label">State: belum ada data ujian sama sekali — stats strip tetap tampil dengan nilai kosong/default, bukan disembunyikan, supaya posisi layout tidak "lompat" saat user mulai dapat data.</p>
+  <div class="header-strip">
+    <span class="title">Ringkasan progres</span>
+    <div class="stat-inline">
+      <div class="item"><div class="val">0x</div><div class="lbl">Ujian</div></div>
+      <div class="item"><div class="val">—</div><div class="lbl">Rerata</div></div>
+      <div class="item"><div class="val">0/4</div><div class="lbl">Progres</div></div>
+      <div class="item"><div class="val">—</div><div class="lbl">Terakhir</div></div>
+    </div>
+  </div>
+  <div class="hero">
+    <div class="badge">✦ MULAI DI SINI</div>
+    <h1>Evaluasi Kemampuan Bahasa Inggris Secara Komprehensif</h1>
+    <div class="quote">"Kickstart Diagnostic"</div>
+    <p>Selesaikan Kickstart Diagnostic untuk memetakan level CEFR dan kekuatan skill kamu di keempat kategori: Grammar, Vocabulary, Reading, dan Cloze.</p>
+    <button class="btn-gold">Mulai Ujian Diagnostic →</button>
+  </div>
+</div>
+
+<!-- 2. PRACTICE -->
+<div id="practice" class="view">
+  <p class="label">State: sedang mengejar syarat kenaikan level lewat 4 latihan skill. Angka strip (17x, 85%, dst) sudah terisi data riil.</p>
+  <div class="header-strip">
+    <span class="title">Ringkasan progres</span>
+    <div class="stat-inline">
+      <div class="item"><div class="val">17x</div><div class="lbl">Ujian</div></div>
+      <div class="item"><div class="val">85%</div><div class="lbl">Rerata</div></div>
+      <div class="item"><div class="val">0/4</div><div class="lbl">Progres</div></div>
+      <div class="item"><div class="val">14 Jul</div><div class="lbl">Terakhir</div></div>
+    </div>
+  </div>
+  <div class="hero">
+    <div class="badge">◆ PROGRES LATIHAN: 0/4 LULUS</div>
+    <h1>Latihan Penguatan Skill (Level B1/B2)</h1>
+    <div class="quote">"Persiapan Kenaikan Level"</div>
+    <p>Selesaikan ke-4 latihan skill dengan nilai minimal 80 untuk membuka Ujian Kenaikan Level.</p>
+    <div class="skillgrid">
+      <div class="skill-box"><div class="top">📄 Grammar</div><div class="status">🧍 Belum Selesai</div></div>
+      <div class="skill-box"><div class="top">🧩 Vocabulary</div><div class="status">🧍 Belum Selesai</div></div>
+      <div class="skill-box"><div class="top">👁 Reading</div><div class="status">🧍 Belum Selesai</div></div>
+      <div class="skill-box rec"><div class="top">✏️ Cloze <span class="tag-rec">REKOMENDASI</span></div><div class="status">🧍 Belum Selesai</div></div>
+    </div>
+    <div class="rec-box">
+      <div class="eyebrow">REKOMENDASI LATIHAN SELANJUTNYA (ANALISIS SAW)</div>
+      <div class="name">Cloze Challenge</div>
+      <div class="desc">Fokus 100% pada pengisian teks rumpang.</div>
+      <button class="btn-gold">Mulai Latihan Sekarang →</button>
+    </div>
+  </div>
+</div>
+
+<!-- 3. LEVEL UP -->
+<div id="levelup" class="view">
+  <p class="label">State: ke-4 latihan skill sudah lulus (4/4), Ujian Kenaikan Level jadi terbuka. Strip stats sama posisinya, hanya "Progres" berubah jadi 4/4.</p>
+  <div class="header-strip">
+    <span class="title">Ringkasan progres</span>
+    <div class="stat-inline">
+      <div class="item"><div class="val">21x</div><div class="lbl">Ujian</div></div>
+      <div class="item"><div class="val">88%</div><div class="lbl">Rerata</div></div>
+      <div class="item"><div class="val">4/4</div><div class="lbl">Progres</div></div>
+      <div class="item"><div class="val">16 Jul</div><div class="lbl">Terakhir</div></div>
+    </div>
+  </div>
+  <div class="hero">
+    <div class="badge green">✓ SEMUA LATIHAN LULUS</div>
+    <h1>Ujian Kenaikan Level Telah Terbuka!</h1>
+    <div class="quote">"Naik dari B1/B2 ke C1/C2"</div>
+    <p>Kamu telah menyelesaikan ke-4 latihan skill dengan nilai minimal 80. Selesaikan Ujian Kenaikan Level untuk membuka level berikutnya.</p>
+    <div class="levelup-box">
+      <div>
+        <div style="font-weight:700;font-size:14px;margin-bottom:3px;">Ujian Kenaikan Level: B1/B2 → C1/C2</div>
+        <div style="font-size:12px;color:#C7C2A8;">⏱ 70 menit · 50 soal</div>
+      </div>
+      <button class="btn-gold">Mulai Ujian →</button>
+    </div>
+  </div>
+</div>
+
+<!-- 4. MASTERED -->
+<div id="mastered" class="view">
+  <p class="label">State: level tertinggi tercapai. Hero paling ringan kontennya — strip stats di atas tetap sama, memastikan posisi tidak berubah dibanding 3 state lain.</p>
+  <div class="header-strip">
+    <span class="title">Ringkasan progres</span>
+    <div class="stat-inline">
+      <div class="item"><div class="val">17x</div><div class="lbl">Ujian</div></div>
+      <div class="item"><div class="val">85%</div><div class="lbl">Rerata</div></div>
+      <div class="item"><div class="val">4/4</div><div class="lbl">Progres</div></div>
+      <div class="item"><div class="val">14 Jul</div><div class="lbl">Terakhir</div></div>
+    </div>
+  </div>
+  <div class="hero">
+    <div class="badge">✦ KEMAMPUAN MAKSIMAL</div>
+    <h1>Tingkat Kemampuan Maksimal Terpenuhi!</h1>
+    <div class="quote">"Level C1/C2 (Proficient)"</div>
+    <p>Selamat! Kamu telah menguasai level tertinggi. Terus asah kemampuan bahasamu dengan melakukan latihan mandiri kapan saja.</p>
+  </div>
+</div>
+
+<script>
+function show(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
