@@ -74,7 +74,7 @@ const HistoryListWidget = ({ title, historyList, type, scoreBadge, formatDate, o
           <div className="rounded-sm p-8 text-center" style={{ background: '#FAF6EC', border: '1px solid #C8B99A' }}>
             <p className="text-3xl mb-3 opacity-30">📋</p>
             <p className="text-sm italic" style={{ fontFamily: "'IM Fell English',serif", color: '#6B5A42' }}>
-              Belum ada {isTryout ? 'riwayat tryout' : 'riwayat latihan'}
+              Belum ada {isTryout ? 'riwayat ujian' : 'riwayat latihan'}
             </p>
             <p className="text-xs mt-1" style={{ color: '#A8946C' }}>
               {isTryout ? 'Mulai dengan Ujian Diagnostic di atas!' : 'Selesaikan latihan penguatan skill di sebelah kiri!'}

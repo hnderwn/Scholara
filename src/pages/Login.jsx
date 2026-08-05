@@ -337,7 +337,7 @@ const Login = () => {
             </p>
 
             <div className="flex flex-col gap-3">
-              {['Ribuan soal tryout terverifikasi', 'Rekomendasi belajar personal', 'Analisis performa mendalam'].map((item) => (
+              {['Ribuan soal ujian terverifikasi', 'Rekomendasi belajar personal', 'Analisis performa mendalam'].map((item) => (
                 <div key={item} className="flex items-center gap-3">
                   <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#BF0A30' }}>
                     <svg width="10" height="10" viewBox="0 0 12 12" fill="none">

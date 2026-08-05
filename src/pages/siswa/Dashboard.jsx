@@ -1011,36 +1011,50 @@ const Dashboard = () => {
                     }
 
                     if (heroState === 'levelup') {
+                      const targetNextCefr = userCefr === 'A1/A2' ? 'B1/B2' : 'C1/C2';
                       return (
                         <>
                           <div className="flex items-center gap-2 mb-3 md:mb-4">
-                            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest px-2 md:py-1 rounded-sm" style={{ background: '#1D9E75', color: '#fff' }}>
+                            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest px-2 md:py-1 rounded-sm text-white" style={{ background: '#16A34A' }}>
                               ✦ Ujian Kenaikan Level Terbuka!
                             </span>
                           </div>
                           <h2 className="text-white text-2xl md:text-4xl font-bold leading-tight mb-1" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
-                            Evaluasi Kenaikan Tingkat ({userCefr} → C1/C2)
+                            Evaluasi Kenaikan Tingkat ({userCefr} → {targetNextCefr})
                           </h2>
                           <p className="text-xs md:text-base italic mb-4 md:mb-1" style={{ fontFamily: "'IM Fell English',serif", color: '#C9A84C' }}>
-                            "Syarat Kelulusan Terpenuhi"
+                            "Selesaikan Ujian Kenaikan Level"
                           </p>
                           <p className="text-sm leading-relaxed mb-6 max-w-lg text-stone-300">
-                            Kamu telah menyelesaikan ke-4 latihan skill dengan nilai minimal 80. Selesaikan Ujian Kenaikan Level untuk membuka level berikutnya.
+                            Kamu telah menyelesaikan ke-4 latihan skill dengan sukses. Ambil Ujian Kenaikan Level untuk menaikkan tingkat kemahiran bahasa Inggrismu secara resmi!
                           </p>
-
-                          <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 rounded-sm border w-full max-w-3xl text-left gap-4" style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(201,168,76,0.3)' }}>
-                            <div>
-                              <div className="text-white font-bold text-sm">Paket Ujian: {activeOverallPkg?.name || 'Kenaikan Level'}</div>
-                              <div className="text-xs text-stone-400 mt-1">⏱ {activeOverallPkg?.duration || 60} menit · {activeOverallPkg?.questions || 30} soal</div>
-                            </div>
-                            <button 
-                              onClick={() => startExam(activeOverallPkg.id)}
-                              className="px-6 py-2.5 text-xs font-bold rounded-sm text-white transition-all hover:bg-[#15803d]"
-                              style={{ background: '#16A34A' }}
-                            >
-                              Mulai Ujian &rarr;
-                            </button>
+                          
+                          <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8">
+                            {[
+                              { icon: '🕒', label: `${activeOverallPkg?.duration || 60}m` },
+                              { icon: '📄', label: `${activeOverallPkg?.questions || 30} soal` },
+                              { icon: '📊', label: activeOverallPkg?.name || 'Ujian Kenaikan Level' },
+                            ].map(({ icon, label }) => (
+                              <div key={label} className="flex items-center gap-1.5 md:gap-2">
+                                <span className="text-sm md:text-base">{icon}</span>
+                                <span className="text-[11px] md:text-sm font-semibold text-stone-200">
+                                  {label}
+                                </span>
+                              </div>
+                            ))}
                           </div>
+
+                          <button
+                            onClick={() => startExam(activeOverallPkg.id)}
+                            className="w-full md:w-auto px-6 md:px-8 py-3 md:py-3.5 text-xs md:text-sm font-bold rounded-sm transition-all flex items-center justify-center gap-2"
+                            style={{ 
+                              background: '#16A34A', 
+                              color: '#fff', 
+                              boxShadow: '0 4px 16px rgba(22,163,74,0.4)' 
+                            }}
+                          >
+                            Mulai Ujian Kenaikan Level
+                          </button>
                         </>
                       );
                     }
@@ -1165,9 +1179,9 @@ const Dashboard = () => {
               <GoldRule opacity={0.6} />
             </div>
 
-            {/* Filter Tabs "Semua, Tryout, Latihan" */}
+            {/* Filter Tabs "Semua, Ujian, Latihan" */}
             <div className="flex bg-[#EDE4CC] p-1 rounded-sm border border-[#C8B99A] mb-4">
-                {['Semua', 'Tryout', 'Latihan'].map((filter) => (
+                {['Semua', 'Ujian', 'Latihan'].map((filter) => (
                   <button
                     key={filter}
                     onClick={() => setHistoryFilter(filter)}
@@ -1191,7 +1205,7 @@ const Dashboard = () => {
 
                 const filtered = combined.filter((exam) => {
                   const isTryoutItem = exam.exam_type === 'tryout' || exam.package_id === 'kickstart_diagnostic' || exam.category_scores?.package_id === 'kickstart_diagnostic';
-                  if (historyFilter === 'Tryout') return isTryoutItem;
+                  if (historyFilter === 'Ujian') return isTryoutItem;
                   if (historyFilter === 'Latihan') return !isTryoutItem;
                   return true;
                 });
@@ -1225,7 +1239,7 @@ const Dashboard = () => {
                     cloze_challenge: 'Latihan Cloze'
                   };
 
-                  const displayName = packageNames[pkgId] || (isTryoutItem ? 'Tryout / Ujian' : 'Latihan Mandiri');
+                  const displayName = packageNames[pkgId] || (isTryoutItem ? 'Ujian Utama' : 'Latihan Mandiri');
 
                   return (
                     <div 
@@ -1250,7 +1264,7 @@ const Dashboard = () => {
                             className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-sm text-white" 
                             style={{ background: isTryoutItem ? '#1A4FAD' : '#BF0A30' }}
                           >
-                            {isTryoutItem ? 'Tryout' : 'Latihan'}
+                            {isTryoutItem ? 'Ujian' : 'Latihan'}
                           </span>
                           <span className="text-[10px] text-[#6B5A42] font-semibold truncate max-w-[120px]">
                             {displayName}

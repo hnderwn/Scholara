@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { RedRule, GoldRule } from '../ui/Rules';
+import { exportToPDF } from '../../utils/export';
 
 /**
  * Modal Laporan Detail Hasil Ujian & Latihan untuk Siswa
@@ -65,6 +66,23 @@ const StudentReportModal = ({ isOpen, report, onClose }) => {
 
   const weakest = testedScores.reduce((prev, current) => (prev.score < current.score) ? prev : current, { score: 100 });
 
+  const handleExportPDF = () => {
+    const columns = ['Kategori Skill', 'Nilai Perolehan', 'Ambang Batas Kelulusan', 'Status'];
+    const rows = [
+      ['Grammar (Struktur Bahasa)', `${grammarScore}%`, '80%', grammarScore >= 80 ? 'Kompeten' : 'Butuh Penguatan'],
+      ['Vocabulary (Kosakata)', `${vocabScore}%`, '80%', vocabScore >= 80 ? 'Kompeten' : 'Butuh Penguatan'],
+      ['Reading (Membaca Bacaan)', `${readingScore}%`, '80%', readingScore >= 80 ? 'Kompeten' : 'Butuh Penguatan'],
+      ['Cloze (Kalimat Rumpang)', `${clozeScore}%`, '80%', clozeScore >= 80 ? 'Kompeten' : 'Butuh Penguatan'],
+    ];
+    exportToPDF(
+      `LAPORAN HASIL ${name.toUpperCase()}`,
+      columns,
+      rows,
+      `Laporan_${name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
+      'portrait'
+    );
+  };
+
   return (
     <div className="fixed inset-0 bg-[#0A2463]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity no-print">
       <div
@@ -79,7 +97,7 @@ const StudentReportModal = ({ isOpen, report, onClose }) => {
           <div className="flex justify-between items-start mb-6 flex-shrink-0">
             <div>
               <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-sm text-white" style={{ background: isTryout ? '#1A4FAD' : '#BF0A30' }}>
-                {isTryout ? 'Tryout / Ujian Utama' : 'Latihan Penguatan'}
+                {isTryout ? 'Ujian Utama' : 'Latihan Penguatan'}
               </span>
               <h2 className="text-2xl font-bold text-[#0A2463] mt-2.5" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
                 {name}
@@ -169,12 +187,18 @@ const StudentReportModal = ({ isOpen, report, onClose }) => {
           </div>
 
           {/* Footer Action */}
-          <div className="flex-shrink-0 pt-2 border-t border-[#C8B99A]/20">
+          <div className="flex-shrink-0 pt-2 border-t border-[#C8B99A]/20 flex gap-3">
+            <button
+              onClick={handleExportPDF}
+              className="flex-1 py-3 bg-[#0A2463] hover:bg-[#1A4FAD] text-white text-sm font-bold uppercase tracking-wider rounded-sm transition-colors text-center"
+            >
+              Cetak PDF
+            </button>
             <button
               onClick={onClose}
-              className="w-full py-3 bg-[#FAF6EC] border border-[#C8B99A] text-[#6B5A42] hover:border-[#0A2463] hover:text-[#0A2463] text-sm font-bold uppercase tracking-wider rounded-sm transition-colors"
+              className="flex-1 py-3 bg-[#FAF6EC] border border-[#C8B99A] text-[#6B5A42] hover:border-[#0A2463] hover:text-[#0A2463] text-sm font-bold uppercase tracking-wider rounded-sm transition-colors text-center"
             >
-              Tutup Laporan
+              Tutup
             </button>
           </div>
         </div>
