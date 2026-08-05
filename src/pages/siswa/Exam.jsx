@@ -174,26 +174,40 @@ const Exam = () => {
       let examQuestions = data || [];
 
       if (packageId === 'kickstart_diagnostic') {
-        // Ujian Diagnostik: Komposisi seimbang agar adil untuk seluruh siswa (15 L1, 20 L2, 15 L3)
-        // Hal ini untuk menghindari ketimpangan statistik di mana user tertentu mendapatkan terlalu banyak soal sulit
-        const l1Pool = shuffleArray(examQuestions.filter((q) => q.difficulty === 1));
-        const l2Pool = shuffleArray(examQuestions.filter((q) => q.difficulty === 2));
-        const l3Pool = shuffleArray(examQuestions.filter((q) => q.difficulty === 3));
+        // Ujian Diagnostik: Komposisi seimbang agar adil untuk seluruh siswa (16 L1, 20 L2, 14 L3)
+        // Terbagi rata ke 4 kategori: Grammar, Vocabulary, Reading, Cloze (masing-masing 12-13 soal)
+        const getBalancedExams = (pool, l1Target, l2Target, l3Target) => {
+          const categories = ['Grammar', 'Vocabulary', 'Reading', 'Cloze'];
+          let selected = [];
 
-        const selectedL1 = l1Pool.slice(0, 15);
-        const selectedL2 = l2Pool.slice(0, 20);
-        const selectedL3 = l3Pool.slice(0, 15);
+          const l1PerCat = Math.floor(l1Target / 4);
+          const l2PerCat = Math.floor(l2Target / 4);
+          const l3PerCat = Math.floor(l3Target / 4);
 
-        let selectedQuestions = [...selectedL1, ...selectedL2, ...selectedL3];
+          categories.forEach(cat => {
+            const catFiltered = pool.filter(q => q.category === cat || (cat === 'Vocabulary' && q.category === 'Vocab'));
+            const l1Pool = shuffleArray(catFiltered.filter(q => q.difficulty === 1));
+            const l2Pool = shuffleArray(catFiltered.filter(q => q.difficulty === 2));
+            const l3Pool = shuffleArray(catFiltered.filter(q => q.difficulty === 3));
 
-        // Jika jumlah soal di bank soal tidak mencukupi untuk memenuhi target 50 soal, isi kekurangannya dari sisa bank soal
-        if (selectedQuestions.length < 50) {
-          const selectedIds = new Set(selectedQuestions.map(q => q.id));
-          const unused = shuffleArray(examQuestions.filter(q => !selectedIds.has(q.id)));
-          selectedQuestions = [...selectedQuestions, ...unused.slice(0, 50 - selectedQuestions.length)];
-        }
+            selected.push(
+              ...l1Pool.slice(0, l1PerCat),
+              ...l2Pool.slice(0, l2PerCat),
+              ...l3Pool.slice(0, l3PerCat)
+            );
+          });
 
-        examQuestions = shuffleArray(selectedQuestions);
+          const totalTarget = l1Target + l2Target + l3Target;
+          if (selected.length < totalTarget) {
+            const selectedIds = new Set(selected.map(q => q.id));
+            const unused = shuffleArray(pool.filter(q => !selectedIds.has(q.id)));
+            selected = [...selected, ...unused.slice(0, totalTarget - selected.length)];
+          }
+
+          return shuffleArray(selected);
+        };
+
+        examQuestions = getBalancedExams(examQuestions, 16, 20, 14);
       } else if (['grammar_master', 'vocab_power', 'reading_pro', 'cloze_challenge', 'practice'].includes(packageId)) {
         let targetCategory = '';
         let totalCount = 20;
@@ -248,37 +262,48 @@ const Exam = () => {
       } else if (packageId === 'daily_speed_check') {
         examQuestions = shuffleArray(examQuestions).slice(0, 15);
       } else if (['basic_mastery', 'pre_intermediate', 'intermediate_path', 'upper_intermediate', 'advanced_pro'].includes(packageId)) {
-        // Helper to fill questions up to target count if not enough specific difficulties exist
-        const fillToTarget = (selected, pool, targetCount) => {
-          if (selected.length >= targetCount) return selected;
-          const selectedIds = new Set(selected.map(q => q.id));
-          const remainingPool = shuffleArray(pool.filter(q => !selectedIds.has(q.id)));
-          return [...selected, ...remainingPool.slice(0, targetCount - selected.length)];
+        const getBalancedExams = (pool, l1Target, l2Target, l3Target) => {
+          const categories = ['Grammar', 'Vocabulary', 'Reading', 'Cloze'];
+          let selected = [];
+
+          const l1PerCat = Math.floor(l1Target / 4);
+          const l2PerCat = Math.floor(l2Target / 4);
+          const l3PerCat = Math.floor(l3Target / 4);
+
+          categories.forEach(cat => {
+            const catFiltered = pool.filter(q => q.category === cat || (cat === 'Vocabulary' && q.category === 'Vocab'));
+            const l1Pool = shuffleArray(catFiltered.filter(q => q.difficulty === 1));
+            const l2Pool = shuffleArray(catFiltered.filter(q => q.difficulty === 2));
+            const l3Pool = shuffleArray(catFiltered.filter(q => q.difficulty === 3));
+
+            selected.push(
+              ...l1Pool.slice(0, l1PerCat),
+              ...l2Pool.slice(0, l2PerCat),
+              ...l3Pool.slice(0, l3PerCat)
+            );
+          });
+
+          const totalTarget = l1Target + l2Target + l3Target;
+          if (selected.length < totalTarget) {
+            const selectedIds = new Set(selected.map(q => q.id));
+            const unused = shuffleArray(pool.filter(q => !selectedIds.has(q.id)));
+            selected = [...selected, ...unused.slice(0, totalTarget - selected.length)];
+          }
+
+          return shuffleArray(selected);
         };
 
         if (packageId === 'basic_mastery') {
-          const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 40);
-          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 10);
-          examQuestions = fillToTarget([...l1, ...l2], examQuestions, 50);
+          examQuestions = getBalancedExams(examQuestions, 40, 10, 0);
         } else if (packageId === 'pre_intermediate') {
-          const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 15);
-          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 35);
-          examQuestions = fillToTarget([...l1, ...l2], examQuestions, 50);
+          examQuestions = getBalancedExams(examQuestions, 16, 34, 0);
         } else if (packageId === 'intermediate_path') {
-          const l1 = shuffleArray(examQuestions.filter((q) => q.difficulty === 1)).slice(0, 10);
-          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 30);
-          const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 10);
-          examQuestions = fillToTarget([...l1, ...l2, ...l3], examQuestions, 50);
+          examQuestions = getBalancedExams(examQuestions, 8, 32, 10);
         } else if (packageId === 'upper_intermediate') {
-          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 20);
-          const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 30);
-          examQuestions = fillToTarget([...l2, ...l3], examQuestions, 50);
+          examQuestions = getBalancedExams(examQuestions, 0, 20, 30);
         } else if (packageId === 'advanced_pro') {
-          const l2 = shuffleArray(examQuestions.filter((q) => q.difficulty === 2)).slice(0, 10);
-          const l3 = shuffleArray(examQuestions.filter((q) => q.difficulty === 3)).slice(0, 40);
-          examQuestions = fillToTarget([...l2, ...l3], examQuestions, 50);
+          examQuestions = getBalancedExams(examQuestions, 0, 8, 42);
         }
-        examQuestions = shuffleArray(examQuestions);
       } else {
         examQuestions = shuffleArray(examQuestions).slice(0, 50);
       }

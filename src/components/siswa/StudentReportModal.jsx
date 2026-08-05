@@ -145,22 +145,42 @@ const StudentReportModal = ({ isOpen, report, onClose }) => {
                   report.category_scores?.cloze
                 );
 
+                const catData = cat.name === 'Grammar' ? report.category_scores?.grammar :
+                                cat.name === 'Vocabulary' ? report.category_scores?.vocab :
+                                cat.name === 'Reading' ? report.category_scores?.reading :
+                                report.category_scores?.cloze;
+                const difficultyStats = catData && typeof catData === 'object' ? catData.difficultyStats : null;
+
                 return (
                   <div 
                     key={cat.name} 
-                    className="p-3.5 rounded-sm border flex items-center justify-between"
+                    className="p-3.5 rounded-sm border flex flex-col justify-between min-h-[70px]"
                     style={{
                       background: isTested ? '#F2ECD8' : 'rgba(0,0,0,0.02)',
                       borderColor: isTested ? 'rgba(200,185,154,0.6)' : 'rgba(0,0,0,0.05)',
                       opacity: isTested ? 1 : 0.4
                     }}
                   >
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-[#6B5A42]">
-                      {cat.name}
-                    </span>
-                    <span className="text-xl font-bold text-[#0A2463]" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
-                      {isTested ? `${score}%` : '—'}
-                    </span>
+                    <div className="flex justify-between items-center w-full">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#6B5A42]">
+                        {cat.name}
+                      </span>
+                      <span className="text-xl font-bold text-[#0A2463]" style={{ fontFamily: "'Cormorant Garamond',serif" }}>
+                        {isTested ? `${score}%` : '—'}
+                      </span>
+                    </div>
+                    {isTested && difficultyStats && (
+                      <div className="mt-2 text-[8px] font-mono text-stone-500 border-t pt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 w-full" style={{ borderColor: 'rgba(200,185,154,0.3)' }}>
+                        {Object.entries(difficultyStats).map(([lvl, stats]) => {
+                          const lvlLabel = lvl === '1' ? 'A1/A2' : lvl === '2' ? 'B1/B2' : 'C1/C2';
+                          return (
+                            <div key={lvl}>
+                              <span className="font-bold text-stone-600">{lvlLabel}:</span> {stats.correct}/{stats.total}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}

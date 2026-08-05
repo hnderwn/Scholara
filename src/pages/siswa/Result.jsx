@@ -302,6 +302,18 @@ const Result = () => {
                                 }}
                               />
                             </div>
+                            {typeof data === 'object' && data.difficultyStats && (
+                              <div className="mt-3 text-[10px] text-stone-500 font-mono flex gap-x-4 border-t pt-2" style={{ borderColor: 'rgba(200,185,154,0.3)' }}>
+                                {Object.entries(data.difficultyStats).map(([lvl, stats]) => {
+                                  const lvlLabel = lvl === '1' ? 'A1/A2' : lvl === '2' ? 'B1/B2' : 'C1/C2';
+                                  return (
+                                    <div key={lvl}>
+                                      <span className="font-bold text-stone-600">{lvlLabel}:</span> {stats.correct}/{stats.total}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </Card>
                         );
                       })}
