@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../lib/supabase';
-import { exportToExcel, exportToPDF } from '../../utils/export';
+import { exportToExcel, exportAnalyticsPDF } from '../../utils/export';
 import { calculateReportsStats } from '../../utils/analytics';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -103,32 +103,56 @@ const Reports = () => {
   };
 
   const handleExportPDF = () => {
-    if (results.length === 0) return;
-    const columns = [
-      'Nama Siswa',
-      'Sekolah',
-      'Tipe Ujian',
-      'Skor Total',
-      'Grammar',
-      'Vocab',
-      'Reading',
-      'Cloze',
-      'Tanggal'
-    ];
-    
-    const rows = results.map(r => [
-      r.profiles?.full_name || 'Anonymous',
-      r.profiles?.school || '—',
-      r.exam_type || 'Ujian',
-      `${r.score_total}/100`,
-      `${r.category_scores?.grammar?.score || 0}%`,
-      `${r.category_scores?.vocab?.score || 0}%`,
-      `${r.category_scores?.reading?.score || 0}%`,
-      `${r.category_scores?.cloze?.score || 0}%`,
-      new Date(r.created_at).toLocaleDateString('id-ID')
-    ]);
-    
-    exportToPDF('SCHOLARA - LAPORAN ANALITIK PERFORMA SISWA', columns, rows, `Laporan_Analitik_${new Date().toISOString().split('T')[0]}.pdf`);
+    if (results.length === 0 || !stats) return;
+
+    // Kumpulkan data performa rata-rata per siswa unik
+    const studentGroups = {};
+    results.forEach(r => {
+      const uId = r.user_id;
+      if (!uId) return;
+      if (!studentGroups[uId]) {
+        studentGroups[uId] = {
+          name: r.profiles?.full_name || 'Anonymous',
+          school: r.profiles?.school || '—',
+          cefr: r.profiles?.cefr_level || 'A1/A2',
+          scores: [],
+          grammar: [],
+          vocab: [],
+          reading: [],
+          cloze: []
+        };
+      }
+      studentGroups[uId].scores.push(r.score_total);
+      if (r.category_scores) {
+        const getScore = (catData) => {
+          if (typeof catData === 'object' && catData !== null) return catData.score || 0;
+          return Number(catData) || 0;
+        };
+        studentGroups[uId].grammar.push(getScore(r.category_scores.grammar));
+        studentGroups[uId].vocab.push(getScore(r.category_scores.vocab));
+        studentGroups[uId].reading.push(getScore(r.category_scores.reading));
+        studentGroups[uId].cloze.push(getScore(r.category_scores.cloze));
+      }
+    });
+
+    const studentData = Object.values(studentGroups).map(g => ({
+      name: g.name,
+      school: g.school,
+      cefr: g.cefr,
+      examCount: g.scores.length,
+      averageScore: g.scores.reduce((a, b) => a + b, 0) / g.scores.length,
+      avgGrammar: g.grammar.reduce((a, b) => a + b, 0) / (g.grammar.length || 1),
+      avgVocab: g.vocab.reduce((a, b) => a + b, 0) / (g.vocab.length || 1),
+      avgReading: g.reading.reduce((a, b) => a + b, 0) / (g.reading.length || 1),
+      avgCloze: g.cloze.reduce((a, b) => a + b, 0) / (g.cloze.length || 1),
+    }));
+
+    exportAnalyticsPDF(
+      'SCHOLARA - LAPORAN ANALITIK PERFORMA SISWA',
+      stats,
+      studentData,
+      `Laporan_Analitik_${new Date().toISOString().split('T')[0]}.pdf`
+    );
   };
 
   if (!isAdmin()) {

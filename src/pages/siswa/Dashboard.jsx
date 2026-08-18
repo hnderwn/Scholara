@@ -9,6 +9,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import StudentReportModal from '../../components/siswa/StudentReportModal';
 import SkillCompetencyMap from '../../components/siswa/SkillCompetencyMap';
 import WeakTopicRecommendations from '../../components/siswa/WeakTopicRecommendations';
+import { exportToPDF, exportCombinedStudentResultsPDF } from '../../utils/export';
 
 // ── Shield Icon ──
 const ShieldIcon = ({ size = 32 }) => (
@@ -188,6 +189,65 @@ const Dashboard = () => {
     onConfirm: () => {},
   });
   const [hasDiagnostic, setHasDiagnostic] = useState(false);
+  const [isPrintDropdownOpen, setIsPrintDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    const closeDropdown = () => setIsPrintDropdownOpen(false);
+    window.addEventListener('click', closeDropdown);
+    return () => window.removeEventListener('click', closeDropdown);
+  }, []);
+
+  const handleExportAllExams = () => {
+    if (tryoutHistory.length === 0) return;
+    
+    exportCombinedStudentResultsPDF(
+      `LAPORAN RIWAYAT UJIAN - ${profile?.full_name?.toUpperCase()}`,
+      tryoutHistory,
+      `Riwayat_Ujian_${profile?.full_name?.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
+    );
+  };
+
+  const handleExportAllPractices = () => {
+    if (practiceHistory.length === 0) return;
+    const columns = ['Kategori Skill', 'Nilai Skor', 'Status Kelulusan', 'Tanggal'];
+    const packageNames = {
+      grammar_master: 'Grammar',
+      vocab_power: 'Vocabulary',
+      reading_pro: 'Reading',
+      cloze_challenge: 'Cloze'
+    };
+
+    const getPracticeScore = (catKey, exam) => {
+      const catData = exam.category_scores?.[catKey];
+      if (catData === undefined || catData === null) return 0;
+      if (typeof catData === 'object') return catData.score || 0;
+      return Number(catData) || 0;
+    };
+
+    const rows = practiceHistory.map(exam => {
+      const pkgId = exam.package_id || exam.category_scores?.package_id;
+      const catKey = pkgId === 'grammar_master' ? 'grammar' :
+                      pkgId === 'vocab_power' ? 'vocab' :
+                      pkgId === 'reading_pro' ? 'reading' : 'cloze';
+      const catName = packageNames[pkgId] || 'Latihan Mandiri';
+      const score = getPracticeScore(catKey, exam);
+
+      return [
+        catName,
+        `${score}%`,
+        score >= 80 ? 'Lulus (Kompeten)' : 'Belum Lulus (Butuh Penguatan)',
+        new Date(exam.created_at).toLocaleDateString('id-ID', { dateStyle: 'medium' })
+      ];
+    });
+
+    exportToPDF(
+      `RIWAYAT LATIHAN - ${profile?.full_name?.toUpperCase()}`,
+      columns,
+      rows,
+      `Riwayat_Latihan_${profile?.full_name?.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
+      'portrait'
+    );
+  };
 
   // Fungsi pengecekan CEFR & Tangga Progresi Ketat (Point 3)
   const CEFR_LEVELS_LADDER = ['A1/A2', 'B1/B2', 'C1/C2'];
@@ -1168,13 +1228,53 @@ const Dashboard = () => {
           {/* RIGHT: Riwayat Aktivitas Ujian & Latihan Gabungan */}
           <div className="space-y-6 no-print text-left">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <svg className="w-4 h-4" fill="none" stroke="#0A2463" viewBox="0 0 24 24" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <h2 className="font-bold text-lg" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
-                  Riwayat Aktivitas Ujian
-                </h2>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="#0A2463" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h2 className="font-bold text-lg" style={{ fontFamily: "'Cormorant Garamond',serif", color: '#0A2463' }}>
+                    Riwayat Aktivitas Ujian
+                  </h2>
+                </div>
+                
+                {/* PRINT DROPDOWN */}
+                <div className="relative">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsPrintDropdownOpen(!isPrintDropdownOpen);
+                    }}
+                    className="px-2.5 py-1.5 bg-[#0A2463] hover:bg-[#1A4FAD] text-white text-[9px] font-bold uppercase tracking-widest rounded-sm transition-all flex items-center gap-1 shadow-sm"
+                  >
+                    <span>🖨️ Cetak Laporan</span>
+                    <span className="text-[7px]">▼</span>
+                  </button>
+                  {isPrintDropdownOpen && (
+                    <div className="absolute right-0 mt-1.5 w-44 bg-[#FAF6EC] border border-[#C8B99A] rounded-sm shadow-xl z-20 overflow-hidden text-left">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsPrintDropdownOpen(false);
+                          handleExportAllExams();
+                        }}
+                        className="w-full text-left px-3 py-2.5 text-[9px] font-bold uppercase tracking-wider text-[#6B5A42] hover:bg-[#EDE4CC] hover:text-[#0A2463] border-b border-[#C8B99A]/20 transition-all flex items-center gap-1.5"
+                      >
+                        <span>📝 Cetak Semua Ujian</span>
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsPrintDropdownOpen(false);
+                          handleExportAllPractices();
+                        }}
+                        className="w-full text-left px-3 py-2.5 text-[9px] font-bold uppercase tracking-wider text-[#6B5A42] hover:bg-[#EDE4CC] hover:text-[#0A2463] transition-all flex items-center gap-1.5"
+                      >
+                        <span>⚡ Cetak Semua Latihan</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <GoldRule opacity={0.6} />
             </div>

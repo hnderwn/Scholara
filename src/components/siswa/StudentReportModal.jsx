@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { RedRule, GoldRule } from '../ui/Rules';
-import { exportToPDF } from '../../utils/export';
+import { exportStudentResultPDF } from '../../utils/export';
 
 /**
  * Modal Laporan Detail Hasil Ujian & Latihan untuk Siswa
@@ -67,19 +67,54 @@ const StudentReportModal = ({ isOpen, report, onClose }) => {
   const weakest = testedScores.reduce((prev, current) => (prev.score < current.score) ? prev : current, { score: 100 });
 
   const handleExportPDF = () => {
-    const columns = ['Kategori Skill', 'Nilai Perolehan', 'Ambang Batas Kelulusan', 'Status'];
-    const rows = [
-      ['Grammar (Struktur Bahasa)', `${grammarScore}%`, '80%', grammarScore >= 80 ? 'Kompeten' : 'Butuh Penguatan'],
-      ['Vocabulary (Kosakata)', `${vocabScore}%`, '80%', vocabScore >= 80 ? 'Kompeten' : 'Butuh Penguatan'],
-      ['Reading (Membaca Bacaan)', `${readingScore}%`, '80%', readingScore >= 80 ? 'Kompeten' : 'Butuh Penguatan'],
-      ['Cloze (Kalimat Rumpang)', `${clozeScore}%`, '80%', clozeScore >= 80 ? 'Kompeten' : 'Butuh Penguatan'],
-    ];
-    exportToPDF(
-      `LAPORAN HASIL ${name.toUpperCase()}`,
-      columns,
-      rows,
-      `Laporan_${name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
-      'portrait'
+    const columns1 = ['Kategori Skill', 'Nilai Perolehan', 'Ambang Batas Kelulusan', 'Status'];
+    const rows1 = testedScores.map(s => {
+      const fullname = s.name === 'Grammar' ? 'Grammar (Struktur Bahasa)' :
+                       s.name === 'Vocabulary' ? 'Vocabulary (Kosakata)' :
+                       s.name === 'Reading' ? 'Reading (Membaca Bacaan)' :
+                       'Cloze (Kalimat Rumpang)';
+      return [
+        fullname,
+        `${s.score}%`,
+        '80%',
+        s.score >= 80 ? 'Kompeten' : 'Butuh Penguatan'
+      ];
+    });
+
+    const columns2 = ['Kategori Skill', 'A1/A2 (Basic)', 'B1/B2 (Intermediate)', 'C1/C2 (Proficient)'];
+    const rows2 = testedScores.map(s => {
+      const fullname = s.name === 'Grammar' ? 'Grammar (Struktur Bahasa)' :
+                       s.name === 'Vocabulary' ? 'Vocabulary (Kosakata)' :
+                       s.name === 'Reading' ? 'Reading (Membaca Bacaan)' :
+                       'Cloze (Kalimat Rumpang)';
+      
+      const catKey = s.name === 'Grammar' ? 'grammar' :
+                     s.name === 'Vocabulary' ? 'vocab' :
+                     s.name === 'Reading' ? 'reading' :
+                     'cloze';
+      const catData = report.category_scores?.[catKey];
+      const stats = catData && typeof catData === 'object' ? catData.difficultyStats : null;
+
+      const getStatStr = (lvl) => {
+        if (!stats || !stats[lvl]) return '—';
+        return `${stats[lvl].correct}/${stats[lvl].total} Benar`;
+      };
+
+      return [
+        fullname,
+        getStatStr('1'),
+        getStatStr('2'),
+        getStatStr('3')
+      ];
+    });
+
+    exportStudentResultPDF(
+      isTryout ? `LAPORAN HASIL UJIAN - ${name.toUpperCase()}` : `LAPORAN HASIL LATIHAN - ${name.toUpperCase()}`,
+      columns1,
+      rows1,
+      isTryout ? columns2 : [],
+      isTryout ? rows2 : [],
+      isTryout ? `Laporan_Ujian_${name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf` : `Laporan_Latihan_${name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
     );
   };
 
@@ -212,7 +247,7 @@ const StudentReportModal = ({ isOpen, report, onClose }) => {
               onClick={handleExportPDF}
               className="flex-1 py-3 bg-[#0A2463] hover:bg-[#1A4FAD] text-white text-sm font-bold uppercase tracking-wider rounded-sm transition-colors text-center"
             >
-              Cetak PDF
+              {isTryout ? 'Cetak Hasil Ujian' : 'Cetak Hasil Latihan'}
             </button>
             <button
               onClick={onClose}

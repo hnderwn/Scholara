@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../lib/supabase';
-import { exportToExcel, exportToPDF } from '../../utils/export';
+import { exportToExcel, exportToPDF, exportCombinedStudentResultsPDF } from '../../utils/export';
 // Import komponen UI tetap dipertahankan agar tidak mengubah struktur dependensi
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { RedRule, GoldRule } from '../../components/ui/Rules';
-import ExportDropdown from '../../components/admin/ExportDropdown';
 import ResultDetailModal from '../../components/admin/ResultDetailModal';
 
 const ResultsCenter = () => {
@@ -14,6 +13,13 @@ const ResultsCenter = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
   const [selectedDetails, setSelectedDetails] = useState(null);
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    const closeDropdown = () => setIsExportDropdownOpen(false);
+    window.addEventListener('click', closeDropdown);
+    return () => window.removeEventListener('click', closeDropdown);
+  }, []);
 
   useEffect(() => {
     loadResults();
@@ -47,32 +53,55 @@ const ResultsCenter = () => {
     exportToExcel(dataToExport, `Hasil_Ujian_${new Date().toISOString().split('T')[0]}.xlsx`, 'Hasil Ujian');
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDFExams = () => {
+    const examResults = filteredResults.filter(r => r.exam_type === 'tryout' || r.package_id === 'kickstart_diagnostic' || r.category_scores?.package_id === 'kickstart_diagnostic');
+    if (examResults.length === 0) return;
+    
+    exportCombinedStudentResultsPDF(
+      'SCHOLARA - LAPORAN HASIL UJIAN SISWA GABUNGAN',
+      examResults,
+      `Laporan_Gabungan_Ujian_${new Date().toISOString().split('T')[0]}.pdf`
+    );
+  };
+
+  const handleExportPDFPractices = () => {
+    const practiceResults = filteredResults.filter(r => r.exam_type === 'practice');
+    if (practiceResults.length === 0) return;
     const columns = [
       'Nama Siswa',
       'Sekolah',
-      'Tipe Ujian',
-      'Skor Total',
-      'Grammar',
-      'Vocab',
-      'Reading',
-      'Cloze',
+      'Skill Latihan',
+      'Skor Perolehan',
+      'Status Kelulusan',
       'Tanggal'
     ];
+
+    const packageNames = {
+      grammar_master: 'Grammar (Struktur Bahasa)',
+      vocab_power: 'Vocabulary (Kosakata)',
+      reading_pro: 'Reading (Membaca Bacaan)',
+      cloze_challenge: 'Cloze (Kalimat Rumpang)'
+    };
     
-    const rows = filteredResults.map(r => [
-      r.profiles?.full_name || 'Anonymous',
-      r.profiles?.school || '—',
-      r.exam_type || 'Ujian',
-      `${r.score_total}/100`,
-      `${r.category_scores?.grammar?.score || 0}%`,
-      `${r.category_scores?.vocab?.score || 0}%`,
-      `${r.category_scores?.reading?.score || 0}%`,
-      `${r.category_scores?.cloze?.score || 0}%`,
-      new Date(r.created_at).toLocaleDateString('id-ID')
-    ]);
+    const rows = practiceResults.map(r => {
+      const pkgId = r.package_id || r.category_scores?.package_id;
+      const catKey = pkgId === 'grammar_master' ? 'grammar' :
+                      pkgId === 'vocab_power' ? 'vocab' :
+                      pkgId === 'reading_pro' ? 'reading' : 'cloze';
+      const scoreData = r.category_scores?.[catKey];
+      const score = scoreData && typeof scoreData === 'object' ? scoreData.score || 0 : Number(scoreData) || 0;
+      
+      return [
+        r.profiles?.full_name || 'Anonymous',
+        r.profiles?.school || '—',
+        packageNames[pkgId] || 'Latihan Mandiri',
+        `${score}%`,
+        score >= 80 ? 'Lulus (Kompeten)' : 'Belum Lulus (Butuh Penguatan)',
+        new Date(r.created_at).toLocaleDateString('id-ID')
+      ];
+    });
     
-    exportToPDF('SCHOLARA - LAPORAN HASIL UJIAN SISWA', columns, rows, `Laporan_Hasil_Ujian_${new Date().toISOString().split('T')[0]}.pdf`);
+    exportToPDF('SCHOLARA - LAPORAN HASIL LATIHAN SISWA', columns, rows, `Laporan_Hasil_Latihan_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleSort = (key) => {
@@ -127,11 +156,54 @@ const ResultsCenter = () => {
               />
             </div>
 
-            <ExportDropdown
-              onPrint={() => window.print()}
-              onExportExcel={handleExportExcel}
-              onExportPDF={handleExportPDF}
-            />
+            {/* CUSTOM ADMIN EXPORT DROPDOWN */}
+            <div className="relative no-print">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExportDropdownOpen(!isExportDropdownOpen);
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 bg-[#0A2463] hover:bg-[#1A4FAD] text-white text-[13px] font-bold rounded-sm flex items-center justify-center gap-2 transition-all shadow-sm active:translate-y-px"
+              >
+                <span>📥</span>
+                <span>Ekspor Laporan</span>
+                <span className="text-[9px]">▼</span>
+              </button>
+              {isExportDropdownOpen && (
+                <div className="absolute right-0 mt-1 w-52 bg-[#FAF6EC] border border-[#C8B99A] rounded-sm shadow-xl z-50 divide-y divide-[rgba(200,185,154,0.3)] text-left">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExportDropdownOpen(false);
+                      handleExportPDFExams();
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-bold text-[#6B5A42] hover:bg-[#EDE4CC] transition-colors flex items-center gap-2"
+                  >
+                    <span>📝</span> Cetak Semua Ujian (.pdf)
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExportDropdownOpen(false);
+                      handleExportPDFPractices();
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-bold text-[#6B5A42] hover:bg-[#EDE4CC] transition-colors flex items-center gap-2"
+                  >
+                    <span>⚡</span> Cetak Semua Latihan (.pdf)
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsExportDropdownOpen(false);
+                      handleExportExcel();
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-bold text-[#6B5A42] hover:bg-[#EDE4CC] transition-colors flex items-center gap-2"
+                  >
+                    <span>📊</span> Ekspor Excel (.xlsx)
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="mb-8">
